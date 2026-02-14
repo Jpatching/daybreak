@@ -7,6 +7,7 @@ authors = ["Jpatching"]
 license = "MIT"
 keywords = ["solana", "ethereum", "migration", "ntt", "wormhole"]
 categories = ["command-line-utilities"]
+repository = "https://github.com/Jpatching/daybreak"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
