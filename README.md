@@ -7,7 +7,6 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Solana](https://img.shields.io/badge/Solana-9945FF?style=flat&logo=solana&logoColor=white)
 
-<!-- Re-record demo with: daybreak migrate, status, list --discover -->
 ![Daybreak Demo](demo.gif)
 
 Daybreak takes any ERC-20 token from analysis to deployed NTT bridge in a single command. It analyzes bytecode, capabilities, proxy patterns, and bridge status on-chain — then deploys the SPL token, writes the NTT config, and orchestrates the Wormhole CLI to complete the bridge. One command to migrate any EVM token to Solana via Sunrise.
