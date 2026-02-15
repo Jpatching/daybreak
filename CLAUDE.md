@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Daybreak is a Rust CLI that analyzes EVM tokens and generates migration reports for moving to Solana via Sunrise (Wormhole NTT). Three commands: `analyze`, `check`, `report`.
+Daybreak is a Rust CLI that analyzes EVM tokens and generates migration reports for moving to Solana via Sunrise (Wormhole NTT). Three commands: `scan`, `report`, `compare`.
 
 **Hackathon deadline: Feb 27, 2026**
 
@@ -14,10 +14,15 @@ Daybreak is a Rust CLI that analyzes EVM tokens and generates migration reports 
 # Build
 cargo build
 
-# Run
-cargo run -- analyze 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum
-cargo run -- check 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum
-cargo run -- report 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum --output report.md
+# Scan — full token analysis with risk score and verdict
+cargo run -- scan 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum
+cargo run -- scan 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum --json
+
+# Report — generate migration report and deployment.json
+cargo run -- report 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum --output ./reports
+
+# Compare — NTT vs Neon EVM vs native rewrite
+cargo run -- compare 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum
 
 # Test
 cargo test
@@ -35,21 +40,38 @@ cargo clippy
 
 ```
 src/
-├── main.rs              # CLI entry point (clap)
-├── cli.rs               # CLI argument definitions
-├── types.rs             # Shared types (TokenInfo, CompatibilityResult, MigrationReport)
-├── analyzer/
-│   ├── evm.rs           # EVM token analysis via JSON-RPC (no ethers-rs)
-│   ├── solana.rs        # Solana checks (Jupiter API, rent costs)
-│   └── compatibility.rs # NTT compatibility checks
+├── main.rs                # CLI entry point (clap)
+├── cli.rs                 # CLI argument definitions (scan, report, compare)
+├── commands/
+│   ├── scan.rs            # Scan command — full analysis with progress output
+│   ├── report.rs          # Report command — markdown + deployment.json
+│   └── compare.rs         # Compare command — migration path comparison
+├── analyzers/
+│   ├── evm/
+│   │   ├── rpc.rs         # Raw JSON-RPC calls via reqwest
+│   │   ├── token.rs       # Token metadata fetching
+│   │   ├── bytecode.rs    # Bytecode analysis (proxy, fee, capabilities)
+│   │   └── decoder.rs     # ABI decoding helpers
+│   ├── bridges.rs         # Bridge detection (Jupiter, Wormhole)
+│   ├── compatibility.rs   # NTT compatibility checks
+│   ├── holders.rs         # Holder distribution via Etherscan
+│   └── solana.rs          # Solana cost estimation
+├── scoring/
+│   └── risk.rs            # Composite risk score calculation
 ├── report/
-│   ├── migration_plan.rs # Migration steps, mode recommendations
-│   ├── ntt_config.rs     # deployment.json generation, NTT CLI commands
-│   └── cost_estimate.rs  # SOL/gas cost estimation
+│   ├── migration_plan.rs  # Migration steps, mode recommendations
+│   ├── ntt_config.rs      # deployment.json generation, NTT CLI commands
+│   ├── comparison.rs      # Path comparison logic
+│   └── cost_estimate.rs   # SOL/gas cost estimation
+├── types/
+│   ├── token.rs           # TokenInfo, Chain, TokenCapabilities
+│   ├── analysis.rs        # BytecodeAnalysis, RiskScore, HolderData
+│   ├── compatibility.rs   # CompatibilityResult, BridgeStatus, NttMode
+│   └── migration.rs       # MigrationPath, MigrationStep
 └── output/
-    ├── terminal.rs      # Colored terminal output
-    ├── markdown.rs      # Markdown report generation
-    └── json.rs          # JSON export
+    ├── terminal.rs        # Colored terminal output with verdict
+    ├── markdown.rs        # Markdown report generation
+    └── json.rs            # JSON export
 ```
 
 ## Code Style

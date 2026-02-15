@@ -1,10 +1,10 @@
-use anyhow::Result;
-use std::path::Path;
 use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer};
 use crate::output::MarkdownGenerator;
 use crate::report::{MigrationPlanGenerator, NttConfigGenerator};
 use crate::scoring::RiskScorer;
 use crate::types::{Chain, FullAnalysis};
+use anyhow::Result;
+use std::path::Path;
 
 /// Run the report command
 pub async fn run_report(
