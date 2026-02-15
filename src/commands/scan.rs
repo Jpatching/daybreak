@@ -1,8 +1,14 @@
-use anyhow::Result;
 use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer};
 use crate::output::{JsonOutput, TerminalOutput};
 use crate::scoring::RiskScorer;
 use crate::types::{Chain, FullAnalysis};
+use anyhow::Result;
+use colored::Colorize;
+
+/// Print a progress step to stderr (won't interfere with JSON output)
+fn progress(msg: &str) {
+    eprintln!("  {} {}", "→".dimmed(), msg.dimmed());
+}
 
 /// Run the scan command
 pub async fn run_scan(
@@ -15,30 +21,44 @@ pub async fn run_scan(
 ) -> Result<()> {
     let chain: Chain = chain.parse()?;
 
+    eprintln!(
+        "\n{} {} on {}\n",
+        "Scanning".bold(),
+        &address[..10].cyan(),
+        chain.to_string().cyan()
+    );
+
     // Initialize analyzers
     let evm = EvmAnalyzer::new(chain, rpc_url);
     let bridge_detector = BridgeDetector::new();
     let holder_analyzer = HolderAnalyzer::new(etherscan_key);
 
     // Fetch token info
+    progress("Fetching token metadata...");
     let token = evm.get_token_info(address).await?;
+    progress("Analyzing token capabilities...");
     let capabilities = evm.get_capabilities(address).await?;
+    progress("Scanning bytecode for patterns...");
     let bytecode = evm.analyze_bytecode(address).await?;
 
     // Check compatibility
+    progress("Checking NTT compatibility...");
     let compatibility = CompatibilityChecker::check(&token, &capabilities, &bytecode);
 
     // Check existing bridges
+    progress("Searching for existing bridges...");
     let bridge_status = bridge_detector.check(address, chain).await?;
 
     // Fetch holder data (optional)
     let holder_data = if !skip_holders {
+        progress("Fetching holder distribution...");
         holder_analyzer.get_holders(address, chain).await.ok()
     } else {
         None
     };
 
     // Calculate risk score
+    progress("Calculating risk score...");
     let risk_score = RiskScorer::calculate(
         &token,
         &capabilities,
@@ -46,6 +66,8 @@ pub async fn run_scan(
         &bridge_status,
         holder_data.as_ref(),
     );
+
+    eprintln!("  {} {}\n", "✓".green(), "Analysis complete.".green());
 
     let analysis = FullAnalysis {
         token,

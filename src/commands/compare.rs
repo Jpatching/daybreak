@@ -1,9 +1,9 @@
-use anyhow::Result;
 use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer};
 use crate::output::{JsonOutput, TerminalOutput};
 use crate::report::PathComparator;
 use crate::scoring::RiskScorer;
 use crate::types::{Chain, FullAnalysis};
+use anyhow::Result;
 
 /// Run the compare command
 pub async fn run_compare(
@@ -30,13 +30,7 @@ pub async fn run_compare(
     let bridge_status = bridge_detector.check(address, chain).await?;
 
     // Calculate risk score (no holder data for compare)
-    let risk_score = RiskScorer::calculate(
-        &token,
-        &capabilities,
-        &bytecode,
-        &bridge_status,
-        None,
-    );
+    let risk_score = RiskScorer::calculate(&token, &capabilities, &bytecode, &bridge_status, None);
 
     let analysis = FullAnalysis {
         token,
