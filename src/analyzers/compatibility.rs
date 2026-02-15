@@ -264,4 +264,137 @@ mod tests {
             .iter()
             .any(|i| i.code == "FEE_ON_TRANSFER" && i.severity == IssueSeverity::Error));
     }
+
+    // ── Mode determination ─────────────────────────────────
+
+    #[test]
+    fn test_determine_mode_burning() {
+        let caps = TokenCapabilities {
+            has_burn: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            CompatibilityChecker::determine_mode(&caps),
+            NttMode::Burning
+        );
+    }
+
+    #[test]
+    fn test_determine_mode_locking() {
+        assert_eq!(
+            CompatibilityChecker::determine_mode(&TokenCapabilities::default()),
+            NttMode::Locking
+        );
+    }
+
+    // ── Decimal handling ───────────────────────────────────
+
+    #[test]
+    fn test_no_trimming_for_6_decimals() {
+        let token = TokenInfo {
+            address: "0x0".to_string(),
+            chain: Chain::Ethereum,
+            name: "Test".to_string(),
+            symbol: "TEST".to_string(),
+            decimals: 6,
+            total_supply: "1000000".to_string(),
+        };
+        let result = CompatibilityChecker::check(
+            &token,
+            &TokenCapabilities::default(),
+            &BytecodeAnalysis::default(),
+        );
+        assert!(!result.decimal_trimming_required);
+        assert_eq!(result.solana_decimals, 6);
+    }
+
+    #[test]
+    fn test_trimming_for_9_decimals() {
+        let token = TokenInfo {
+            address: "0x0".to_string(),
+            chain: Chain::Ethereum,
+            name: "Test".to_string(),
+            symbol: "TEST".to_string(),
+            decimals: 9,
+            total_supply: "1000000".to_string(),
+        };
+        let result = CompatibilityChecker::check(
+            &token,
+            &TokenCapabilities::default(),
+            &BytecodeAnalysis::default(),
+        );
+        assert!(result.decimal_trimming_required);
+        assert_eq!(result.solana_decimals, 8);
+    }
+
+    // ── Rebasing → incompatible ────────────────────────────
+
+    #[test]
+    fn test_rebasing_incompatible() {
+        let token = TokenInfo {
+            address: "0x0".to_string(),
+            chain: Chain::Ethereum,
+            name: "stETH".to_string(),
+            symbol: "stETH".to_string(),
+            decimals: 18,
+            total_supply: "1000000".to_string(),
+        };
+        let caps = TokenCapabilities {
+            is_rebasing: true,
+            ..Default::default()
+        };
+        let result = CompatibilityChecker::check(&token, &caps, &BytecodeAnalysis::default());
+        assert!(!result.is_compatible);
+        assert!(result
+            .issues
+            .iter()
+            .any(|i| i.code == "REBASING" && i.severity == IssueSeverity::Error));
+    }
+
+    // ── Combined features: pausable + blacklistable ────────
+
+    #[test]
+    fn test_pausable_blacklistable_compatible_with_warnings() {
+        let token = TokenInfo {
+            address: "0x0".to_string(),
+            chain: Chain::Ethereum,
+            name: "Test".to_string(),
+            symbol: "TEST".to_string(),
+            decimals: 6,
+            total_supply: "1000000".to_string(),
+        };
+        let caps = TokenCapabilities {
+            has_pause: true,
+            has_blacklist: true,
+            ..Default::default()
+        };
+        let result = CompatibilityChecker::check(&token, &caps, &BytecodeAnalysis::default());
+        assert!(result.is_compatible); // warnings don't block
+        assert!(result.issues.iter().any(|i| i.code == "PAUSABLE"));
+        assert!(result.issues.iter().any(|i| i.code == "BLACKLIST"));
+    }
+
+    // ── Burnable token produces Info issue ──────────────────
+
+    #[test]
+    fn test_burnable_info_issue() {
+        let token = TokenInfo {
+            address: "0x0".to_string(),
+            chain: Chain::Ethereum,
+            name: "Test".to_string(),
+            symbol: "TEST".to_string(),
+            decimals: 6,
+            total_supply: "1000000".to_string(),
+        };
+        let caps = TokenCapabilities {
+            has_burn: true,
+            ..Default::default()
+        };
+        let result = CompatibilityChecker::check(&token, &caps, &BytecodeAnalysis::default());
+        assert!(result.is_compatible);
+        assert!(result
+            .issues
+            .iter()
+            .any(|i| i.code == "BURNABLE" && i.severity == IssueSeverity::Info));
+    }
 }
