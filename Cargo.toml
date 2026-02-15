@@ -17,3 +17,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 colored = "2"
 anyhow = "1"
+solana-sdk = "~1.18"
+solana-client = "~1.18"
+spl-token = "~4.0"
