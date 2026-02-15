@@ -96,6 +96,25 @@ pub enum Commands {
         transfer_authority: Option<String>,
     },
 
+    /// Pre-migration readiness check — verify tools, wallet, and config
+    Check {
+        /// Token contract address (0x...)
+        #[arg(value_name = "ADDRESS")]
+        address: String,
+
+        /// Source chain
+        #[arg(short, long, default_value = "ethereum")]
+        chain: String,
+
+        /// Solana network: devnet or mainnet
+        #[arg(long, default_value = "devnet")]
+        network: String,
+
+        /// Path to Solana keypair JSON file
+        #[arg(long, default_value = "~/.config/solana/id.json")]
+        keypair: String,
+    },
+
     /// Discover migration-ready ERC-20 tokens for Solana
     List {
         /// Source chain

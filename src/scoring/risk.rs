@@ -30,11 +30,11 @@ impl RiskScorer {
     /// Gradual scale based on how much trimming NTT needs
     fn score_decimals(decimals: u8) -> u8 {
         match decimals {
-            0..=8 => 0,   // No trimming needed
-            9 => 3,       // Minimal trimming
-            10..=12 => 8, // Moderate trimming
+            0..=8 => 0,    // No trimming needed
+            9 => 3,        // Minimal trimming
+            10..=12 => 8,  // Moderate trimming
             13..=15 => 14, // Significant trimming
-            _ => 20,      // Maximum trimming (16-18 decimals)
+            _ => 20,       // Maximum trimming (16-18 decimals)
         }
     }
 

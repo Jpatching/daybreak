@@ -84,8 +84,7 @@ impl VolumeAnalyzer {
         }
 
         // Estimate daily volume from the transfer timestamps
-        let (daily_transfers, daily_volume) =
-            Self::estimate_daily_activity(&transfers, decimals);
+        let (daily_transfers, daily_volume) = Self::estimate_daily_activity(&transfers, decimals);
 
         Self::calculate_recommendation(daily_transfers, daily_volume, decimals, total_supply_raw)
     }
@@ -156,9 +155,7 @@ impl VolumeAnalyzer {
         total_supply_raw: &str,
     ) -> Result<RateLimitRecommendation> {
         // Parse total supply as whole tokens
-        let supply_tokens = total_supply_raw
-            .parse::<f64>()
-            .unwrap_or(1_000_000_000.0);
+        let supply_tokens = total_supply_raw.parse::<f64>().unwrap_or(1_000_000_000.0);
 
         // Conservative rate limit: 10% of daily volume, floored at 0.1% of supply
         let volume_based_limit = (daily_volume * 0.1).max(1.0);
@@ -202,14 +199,16 @@ impl VolumeAnalyzer {
     }
 
     /// Fallback when no API key available — estimate from total supply
-    fn fallback_recommendation(_decimals: u8, total_supply_raw: &str) -> RateLimitRecommendation {
-        let supply_tokens = total_supply_raw
-            .parse::<f64>()
-            .unwrap_or(1_000_000_000.0);
+    fn fallback_recommendation(decimals: u8, total_supply_raw: &str) -> RateLimitRecommendation {
+        let supply_raw = total_supply_raw.parse::<f64>().unwrap_or(1_000_000_000.0);
+
+        // Convert raw supply to token units using decimals
+        let divisor = 10f64.powi(decimals as i32);
+        let supply_tokens = supply_raw / divisor;
 
         // Without volume data, use 0.1% of supply as conservative default
-        let daily_limit = (supply_tokens * 0.001).max(1.0) as u64;
-        let per_tx = (daily_limit as f64 * 0.01).max(1.0) as u64;
+        let daily_limit = (supply_tokens * 0.001).clamp(1_000.0, 100_000_000.0) as u64;
+        let per_tx = (daily_limit as f64 * 0.01).max(100.0) as u64;
 
         RateLimitRecommendation {
             daily_transfers: 0,

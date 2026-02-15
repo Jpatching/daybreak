@@ -29,11 +29,7 @@ impl TerminalOutput {
         Self::print_capability("Permit (EIP-2612)", analysis.capabilities.has_permit);
         Self::print_capability("Upgradeable", analysis.capabilities.is_upgradeable);
         if analysis.capabilities.is_rebasing {
-            println!(
-                "  {:<18} {}",
-                "Rebasing",
-                "Yes ✗".red().bold()
-            );
+            println!("  {:<18} {}", "Rebasing", "Yes ✗".red().bold());
         }
 
         // Bytecode analysis
@@ -154,8 +150,12 @@ impl TerminalOutput {
             // Worked example showing precision loss
             let trimmed_digits = evm_decimals - compat.solana_decimals;
             let example_whole = "1";
-            let kept: String = (0..compat.solana_decimals).map(|i| char::from(b'1' + (i % 9))).collect();
-            let dust: String = (0..trimmed_digits).map(|i| char::from(b'1' + ((compat.solana_decimals + i) % 9))).collect();
+            let kept: String = (0..compat.solana_decimals)
+                .map(|i| char::from(b'1' + (i % 9)))
+                .collect();
+            let dust: String = (0..trimmed_digits)
+                .map(|i| char::from(b'1' + ((compat.solana_decimals + i) % 9)))
+                .collect();
             println!(
                 "  Example:    {}.{}{} → {}.{}",
                 example_whole,
@@ -298,10 +298,7 @@ impl TerminalOutput {
         Self::print_section("Holder Distribution");
         match &analysis.holder_data {
             Some(data) => {
-                println!(
-                    "  Top-10 concentration: {:.1}%",
-                    data.top_10_concentration
-                );
+                println!("  Top-10 concentration: {:.1}%", data.top_10_concentration);
                 if let Some(total) = data.total_holders {
                     println!("  Total holders:       {}", total);
                 }
@@ -312,16 +309,15 @@ impl TerminalOutput {
                     let show = data.top_holders.len().min(5);
                     for (i, holder) in data.top_holders[..show].iter().enumerate() {
                         let addr = if holder.address.len() > 12 {
-                            format!("{}...{}", &holder.address[..6], &holder.address[holder.address.len()-4..])
+                            format!(
+                                "{}...{}",
+                                &holder.address[..6],
+                                &holder.address[holder.address.len() - 4..]
+                            )
                         } else {
                             holder.address.clone()
                         };
-                        println!(
-                            "  {}. {} — {:.2}%",
-                            i + 1,
-                            addr.cyan(),
-                            holder.percentage
-                        );
+                        println!("  {}. {} — {:.2}%", i + 1, addr.cyan(), holder.percentage);
                     }
                 }
 
@@ -362,10 +358,7 @@ impl TerminalOutput {
                     format!("{}", rl.recommended_per_tx_limit).cyan()
                 );
                 if rl.daily_transfers > 0 {
-                    println!(
-                        "  Based on:     ~{} transfers/day",
-                        rl.daily_transfers
-                    );
+                    println!("  Based on:     ~{} transfers/day", rl.daily_transfers);
                 }
                 if rl.high_volume_warning {
                     println!(

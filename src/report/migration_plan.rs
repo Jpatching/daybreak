@@ -111,7 +111,10 @@ impl MigrationPlanGenerator {
             None => "Set up rate limits for bridge transfers (use --etherscan-key for volume-based recommendation)".to_string(),
         };
         let rate_limit_cmd = match &analysis.rate_limit {
-            Some(rl) => format!("ntt configure-limits --daily-limit {}", rl.recommended_daily_limit),
+            Some(rl) => format!(
+                "ntt configure-limits --daily-limit {}",
+                rl.recommended_daily_limit
+            ),
             None => "ntt configure-limits --daily-limit 1000000".to_string(),
         };
         steps.push(MigrationStep {
