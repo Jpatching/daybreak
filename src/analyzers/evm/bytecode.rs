@@ -209,4 +209,84 @@ mod tests {
             BytecodeComplexity::Complex
         );
     }
+
+    // ── Capability detection ───────────────────────────────
+
+    #[test]
+    fn test_detect_capabilities_mint_burn() {
+        // Bytecode containing mint and burn selectors
+        let bytecode = format!(
+            "608060405234{}00{}00{}",
+            capability_selectors::MINT,
+            capability_selectors::BURN,
+            "deadbeef"
+        );
+        let analyzer = BytecodeAnalyzer::new();
+        let caps = analyzer.detect_capabilities(&bytecode);
+        assert!(caps.has_mint);
+        assert!(caps.has_burn);
+        assert!(!caps.is_rebasing);
+    }
+
+    #[test]
+    fn test_detect_capabilities_one_rebase_selector_not_rebasing() {
+        // Only 1 rebase selector → not flagged as rebasing
+        let bytecode = format!("608060405234{}00deadbeef", capability_selectors::REBASE);
+        let analyzer = BytecodeAnalyzer::new();
+        let caps = analyzer.detect_capabilities(&bytecode);
+        assert!(!caps.is_rebasing);
+    }
+
+    #[test]
+    fn test_detect_capabilities_two_rebase_selectors_is_rebasing() {
+        let bytecode = format!(
+            "608060405234{}00{}00deadbeef",
+            capability_selectors::REBASE,
+            capability_selectors::SHARES_OF,
+        );
+        let analyzer = BytecodeAnalyzer::new();
+        let caps = analyzer.detect_capabilities(&bytecode);
+        assert!(caps.is_rebasing);
+    }
+
+    // ── Fee pattern detection ──────────────────────────────
+
+    #[test]
+    fn test_detect_fee_pattern() {
+        let analyzer = BytecodeAnalyzer::new();
+        // setFee(uint256) selector = 69fe0e2d
+        assert!(analyzer.detect_fee_pattern("6080604069fe0e2d0000"));
+        assert!(!analyzer.detect_fee_pattern("608060400000000000"));
+    }
+
+    // ── Full analyze ───────────────────────────────────────
+
+    #[test]
+    fn test_analyze_empty_bytecode() {
+        let analyzer = BytecodeAnalyzer::new();
+        let result = analyzer.analyze("0x");
+        assert_eq!(result.size_bytes, 0);
+        assert_eq!(result.complexity, BytecodeComplexity::Simple);
+        assert!(!result.is_proxy);
+    }
+
+    // ── Complexity boundary values ─────────────────────────
+
+    #[test]
+    fn test_complexity_boundary_5k() {
+        // Exactly 5*1024 = 5120 → Moderate (not Simple)
+        assert_eq!(
+            BytecodeAnalyzer::calculate_complexity(5 * 1024),
+            BytecodeComplexity::Moderate
+        );
+    }
+
+    #[test]
+    fn test_complexity_boundary_15k() {
+        // Exactly 15*1024 = 15360 → Complex (not Moderate)
+        assert_eq!(
+            BytecodeAnalyzer::calculate_complexity(15 * 1024),
+            BytecodeComplexity::Complex
+        );
+    }
 }
