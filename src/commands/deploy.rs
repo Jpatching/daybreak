@@ -115,6 +115,26 @@ pub async fn run_deploy(
 
     let mint_str = result.mint_address.to_string();
 
+    // Create on-chain metadata so the token shows up in wallets (Phantom, Solflare, etc.)
+    progress("Creating on-chain metadata (Metaplex)...");
+    match deployer.create_metadata(&payer, &result.mint_address, &token.name, &token.symbol) {
+        Ok(_sig) => {
+            eprintln!(
+                "  {} Metadata created: {} ({})",
+                "✓".green(),
+                token.name,
+                token.symbol
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "  {} Metadata creation failed: {} (token still usable)",
+                "⚠".yellow(),
+                e
+            );
+        }
+    }
+
     // Transfer mint authority if requested
     if let Some(new_authority) = transfer_authority {
         progress("Transferring mint authority...");
@@ -171,12 +191,14 @@ pub async fn run_deploy(
     }
     println!(
         "  {} Initialize NTT with this token:",
-        if transfer_authority.is_some() { "1." } else { "2." }.bright_white()
+        if transfer_authority.is_some() {
+            "1."
+        } else {
+            "2."
+        }
+        .bright_white()
     );
-    println!(
-        "     {}",
-        "ntt init".cyan()
-    );
+    println!("     {}", "ntt init".cyan());
     let step_base = if transfer_authority.is_some() { 2 } else { 3 };
     println!(
         "  {} Add source chain:",

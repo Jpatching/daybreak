@@ -1,4 +1,9 @@
 use anyhow::{Context, Result};
+use mpl_token_metadata::{
+    accounts::Metadata,
+    instructions::{CreateMetadataAccountV3, CreateMetadataAccountV3InstructionArgs},
+    types::DataV2,
+};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -106,6 +111,59 @@ impl SolanaDeployer {
             cost_sol,
             network: self.network.clone(),
         })
+    }
+
+    /// Create on-chain Metaplex metadata so the token shows up in wallets
+    pub fn create_metadata(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        name: &str,
+        symbol: &str,
+    ) -> Result<Signature> {
+        let (metadata_pda, _bump) = Metadata::find_pda(mint);
+
+        let create_metadata_ix = CreateMetadataAccountV3 {
+            metadata: metadata_pda,
+            mint: *mint,
+            mint_authority: payer.pubkey(),
+            payer: payer.pubkey(),
+            update_authority: (payer.pubkey(), true),
+            system_program: solana_sdk::system_program::ID,
+            rent: None,
+        }
+        .instruction(CreateMetadataAccountV3InstructionArgs {
+            data: DataV2 {
+                name: name.to_string(),
+                symbol: symbol.to_string(),
+                uri: String::new(), // No off-chain JSON needed for fungible tokens
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            },
+            is_mutable: true,
+            collection_details: None,
+        });
+
+        let recent_blockhash = self
+            .client
+            .get_latest_blockhash()
+            .context("Failed to get recent blockhash")?;
+
+        let tx = Transaction::new_signed_with_payer(
+            &[create_metadata_ix],
+            Some(&payer.pubkey()),
+            &[payer],
+            recent_blockhash,
+        );
+
+        let signature = self
+            .client
+            .send_and_confirm_transaction(&tx)
+            .context("Failed to create token metadata")?;
+
+        Ok(signature)
     }
 
     /// Transfer mint authority to a new address (e.g. NTT manager)

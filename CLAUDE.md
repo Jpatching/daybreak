@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Daybreak is a Rust CLI that analyzes EVM tokens and generates migration reports for moving to Solana via Sunrise (Wormhole NTT). Three commands: `scan`, `report`, `compare`.
+Daybreak is a Rust CLI that analyzes EVM tokens and generates migration reports for moving to Solana via Sunrise (Wormhole NTT). Six commands: `list`, `scan`, `report`, `compare`, `deploy`, `check`.
 
 **Hackathon deadline: Feb 27, 2026**
 

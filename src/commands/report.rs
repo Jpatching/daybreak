@@ -1,4 +1,6 @@
-use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer, VolumeAnalyzer};
+use crate::analyzers::{
+    BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer, VolumeAnalyzer,
+};
 use crate::output::MarkdownGenerator;
 use crate::report::{MigrationPlanGenerator, NttConfigGenerator};
 use crate::scoring::RiskScorer;

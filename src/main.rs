@@ -62,7 +62,23 @@ async fn main() -> Result<()> {
             keypair,
             transfer_authority,
         } => {
-            commands::run_deploy(&address, &chain, cli.rpc_url, &network, &keypair, transfer_authority.as_deref()).await?;
+            commands::run_deploy(
+                &address,
+                &chain,
+                cli.rpc_url,
+                &network,
+                &keypair,
+                transfer_authority.as_deref(),
+            )
+            .await?;
+        }
+        Commands::Check {
+            address,
+            chain,
+            network,
+            keypair,
+        } => {
+            commands::run_check(&address, &chain, cli.rpc_url, &network, &keypair).await?;
         }
         Commands::List { chain, limit, json } => {
             commands::run_list(&chain, cli.rpc_url, limit, json).await?;

@@ -2,6 +2,47 @@
 
 All notable changes to Daybreak will be documented in this file.
 
+## [0.4.0] - 2026-02-15
+
+### Added
+- `check` command — pre-migration readiness checker verifying NTT CLI, Solana CLI, wallet balance, token compatibility
+- Metaplex token metadata — `deploy` now creates on-chain metadata so tokens display name/symbol in wallets (Phantom, Solflare)
+- Wormhole transceiver config in deployment.json (`transceivers` section with consistency level)
+- GitHub Actions CI — cargo test + clippy + fmt on push/PR
+- Expanded curated token list from 18 to 55 tokens (more migration candidates)
+
+### Changed
+- NTT mode logic — burning mode now requires burn capability (was `burn || mint`); mint-only tokens correctly get Locking mode
+- deployment.json always includes rate limits (fallback defaults when no Etherscan key)
+- Rate limit fallback now accounts for token decimals (was overflowing for 18-decimal tokens)
+- ntt-commands.sh now includes shebang, set -e, and descriptive header
+- README overhauled with ONDO hero example, "Why NTT?" section, prerequisites, full migration flow diagram, architecture section
+
+### Fixed
+- ONDO deployment.json incorrectly showed "burning" mode for source chain (should be "locking")
+- Supply-based rate limit fallback overflowed u64 for 18-decimal tokens
+
+## [0.3.0] - 2026-02-15
+
+### Added
+- Smart rate limit calculator — fetches 24h transfer volume from Etherscan and recommends NTT daily/per-tx limits based on actual on-chain activity
+- Rate limit section in scan output, markdown reports, and deployment.json
+- Mint authority transfer — `--transfer-authority` flag on `deploy` command to hand off mint to NTT manager
+- Post-deploy instructions after `deploy` showing full NTT setup sequence (authority → init → add-chain → deploy → test)
+- Authority transfer step in generated ntt-commands.sh
+- Decimal dust explainer — worked example showing precision loss when trimming (e.g. 18 → 8 decimals)
+- "Decimal Migration" section in markdown reports with dust calculation
+- Rebasing token detection via bytecode selectors (stETH-style)
+- Rebasing compatibility error with wrapping recommendation
+- Holder distribution display in scan output and markdown reports
+- Missing data transparency — surfaces when holder/volume data is unavailable
+
+### Changed
+- Rate limits in deployment.json and CLI commands now use calculated values instead of hardcoded 1,000,000
+- Decimal risk scoring uses gradual scale instead of step function
+- Missing holder data now adds 5-point unknown risk penalty (was 0)
+- Single-holder >50% concentration flagged as maximum risk (15/15)
+
 ## [0.2.0] - 2026-02-15
 
 ### Added
