@@ -1,4 +1,6 @@
-use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer, VolumeAnalyzer};
+use crate::analyzers::{
+    BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer, VolumeAnalyzer,
+};
 use crate::output::{JsonOutput, TerminalOutput};
 use crate::scoring::RiskScorer;
 use crate::types::{Chain, FullAnalysis};

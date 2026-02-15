@@ -241,7 +241,9 @@ impl MarkdownGenerator {
             let sol_dec = analysis.compatibility.solana_decimals;
             let trimmed = evm_dec - sol_dec;
             let kept: String = (0..sol_dec).map(|i| char::from(b'1' + (i % 9))).collect();
-            let dust: String = (0..trimmed).map(|i| char::from(b'1' + ((sol_dec + i) % 9))).collect();
+            let dust: String = (0..trimmed)
+                .map(|i| char::from(b'1' + ((sol_dec + i) % 9)))
+                .collect();
             let max_loss = 1.0 / 10f64.powi(sol_dec as i32);
 
             md.push_str("## Decimal Migration\n\n");
@@ -252,14 +254,8 @@ impl MarkdownGenerator {
             md.push_str("**Worked example:**\n\n");
             md.push_str("| | Value |\n");
             md.push_str("|--|-------|\n");
-            md.push_str(&format!(
-                "| EVM amount | `1.{}{}` |\n",
-                kept, dust
-            ));
-            md.push_str(&format!(
-                "| Solana amount | `1.{}` |\n",
-                kept
-            ));
+            md.push_str(&format!("| EVM amount | `1.{}{}` |\n", kept, dust));
+            md.push_str(&format!("| Solana amount | `1.{}` |\n", kept));
             md.push_str(&format!(
                 "| Dust (locked) | `0.{}{}` |\n",
                 "0".repeat(sol_dec as usize),

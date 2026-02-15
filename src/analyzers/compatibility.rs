@@ -71,10 +71,7 @@ impl CompatibilityChecker {
     }
 
     /// Rebasing tokens change balances without transfers — locked tokens desync from minted tokens
-    fn check_rebasing(
-        capabilities: &TokenCapabilities,
-        issues: &mut Vec<CompatibilityIssue>,
-    ) {
+    fn check_rebasing(capabilities: &TokenCapabilities, issues: &mut Vec<CompatibilityIssue>) {
         if capabilities.is_rebasing {
             issues.push(CompatibilityIssue {
                 severity: IssueSeverity::Error,
@@ -144,15 +141,15 @@ impl CompatibilityChecker {
             });
         }
 
-        // Mint capability is good for burning mode
+        // Mint capability noted but not sufficient alone for burning mode
         if capabilities.has_mint {
             issues.push(CompatibilityIssue {
                 severity: IssueSeverity::Info,
                 code: "MINTABLE".to_string(),
                 title: "Mintable Token".to_string(),
-                description: "Token has mint capability, enabling burning mode on source chain."
-                    .to_string(),
-                recommendation: "Burning mode recommended: burn on source, mint on destination."
+                description: "Token has mint capability on the source chain.".to_string(),
+                recommendation: "Mint capability alone does not enable burning mode. \
+                    Burning mode requires burn capability so the NTT manager can burn tokens."
                     .to_string(),
             });
         }
@@ -203,11 +200,11 @@ impl CompatibilityChecker {
         }
     }
 
-    /// Determine recommended NTT mode based on token capabilities
+    /// Determine recommended NTT mode based on token capabilities.
+    /// Burning mode requires burn capability on the source chain so the
+    /// NTT manager can burn tokens when bridging. Mint-only is not enough.
     fn determine_mode(capabilities: &TokenCapabilities) -> NttMode {
-        // If token can burn, burning mode is preferred
-        // (burn on source, mint on destination)
-        if capabilities.has_burn || capabilities.has_mint {
+        if capabilities.has_burn {
             NttMode::Burning
         } else {
             // Locking mode: lock on source, mint on destination

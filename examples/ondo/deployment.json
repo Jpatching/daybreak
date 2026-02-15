@@ -9,7 +9,10 @@
       "token": {
         "address": "0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3",
         "decimals": 18,
-        "mode": "burning"
+        "mode": "locking"
+      },
+      "transceiver": {
+        "type": "wormhole"
       }
     },
     "destination": {
@@ -17,7 +20,20 @@
       "token": {
         "decimals": 8,
         "mode": "burning"
+      },
+      "transceiver": {
+        "type": "wormhole"
       }
+    }
+  },
+  "rate_limits": {
+    "daily_limit": 10000000,
+    "per_transaction_limit": 100000
+  },
+  "transceivers": {
+    "default": "wormhole",
+    "wormhole": {
+      "consistency_level": "finalized"
     }
   }
 }
