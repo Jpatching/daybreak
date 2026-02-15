@@ -1,6 +1,5 @@
 use crate::types::{
-    FullAnalysis, MigrationMethod, MigrationPlan, MigrationStep,
-    NttDeploymentConfig, NttMode,
+    FullAnalysis, MigrationMethod, MigrationPlan, MigrationStep, NttDeploymentConfig, NttMode,
 };
 
 /// Generates migration plans based on analysis results
@@ -132,10 +131,7 @@ impl MigrationPlanGenerator {
             MigrationStep {
                 order: 2,
                 title: "Deploy Token Contract".to_string(),
-                description: format!(
-                    "Deploy {} contract to Neon EVM",
-                    analysis.token.symbol
-                ),
+                description: format!("Deploy {} contract to Neon EVM", analysis.token.symbol),
                 command: None,
             },
             MigrationStep {

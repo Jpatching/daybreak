@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::types::{FullAnalysis, MigrationPath};
+use anyhow::Result;
 
 /// Handles JSON output formatting
 pub struct JsonOutput;

@@ -1,14 +1,14 @@
-pub mod rpc;
-pub mod token;
 pub mod bytecode;
 pub mod decoder;
+pub mod rpc;
+pub mod token;
 
+use crate::types::{BytecodeAnalysis, Chain, TokenCapabilities, TokenInfo};
 use anyhow::Result;
-use crate::types::{Chain, TokenInfo, TokenCapabilities, BytecodeAnalysis};
 
+pub use bytecode::BytecodeAnalyzer;
 pub use rpc::EvmRpcClient;
 pub use token::TokenAnalyzer;
-pub use bytecode::BytecodeAnalyzer;
 
 /// Main EVM analyzer combining all EVM-related analysis
 pub struct EvmAnalyzer {

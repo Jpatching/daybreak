@@ -2,14 +2,14 @@ use crate::types::{BytecodeAnalysis, BytecodeComplexity, ProxyType, TokenCapabil
 
 /// Function selectors for token capability detection
 mod capability_selectors {
-    pub const MINT: &str = "40c10f19";      // mint(address,uint256)
-    pub const BURN: &str = "42966c68";      // burn(uint256)
+    pub const MINT: &str = "40c10f19"; // mint(address,uint256)
+    pub const BURN: &str = "42966c68"; // burn(uint256)
     pub const BURN_FROM: &str = "79cc6790"; // burnFrom(address,uint256)
-    pub const PAUSE: &str = "8456cb59";     // pause()
-    pub const UNPAUSE: &str = "3f4ba83a";   // unpause()
+    pub const PAUSE: &str = "8456cb59"; // pause()
+    pub const UNPAUSE: &str = "3f4ba83a"; // unpause()
     pub const BLACKLIST: &str = "f9f92be4"; // blacklist(address)
     pub const ADD_BLACKLIST: &str = "44337ea1"; // addBlacklist(address)
-    pub const PERMIT: &str = "d505accf";    // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
+    pub const PERMIT: &str = "d505accf"; // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
 }
 
 /// EVM opcodes of interest
@@ -124,8 +124,8 @@ impl BytecodeAnalyzer {
         bytecode.to_lowercase().contains(&target)
     }
 
-    /// Detect fee-on-transfer patterns
-    /// Looks for common patterns like percentage calculations in transfer
+    /// Detect fee-on-transfer patterns via known function selectors
+    /// Only checks for explicit fee setter functions to avoid false positives
     fn detect_fee_pattern(&self, bytecode: &str) -> bool {
         let bytecode_lower = bytecode.to_lowercase();
 
@@ -140,17 +140,6 @@ impl BytecodeAnalyzer {
 
         for selector in fee_selectors {
             if bytecode_lower.contains(selector) {
-                return true;
-            }
-        }
-
-        // Look for division by 100 or 1000 (common fee calculation patterns)
-        // PUSH1 0x64 (100) followed by DIV
-        // This is a heuristic and may have false positives
-        if bytecode_lower.contains("6064") || bytecode_lower.contains("6103e8") {
-            // Check if transfer selector is present (more confidence)
-            if bytecode_lower.contains("a9059cbb") {
-                // transfer(address,uint256)
                 return true;
             }
         }

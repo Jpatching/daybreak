@@ -14,29 +14,16 @@ pub enum Chain {
 }
 
 impl Chain {
-    /// Returns the chain ID for EVM networks
-    pub fn chain_id(&self) -> u64 {
-        match self {
-            Chain::Ethereum => 1,
-            Chain::Polygon => 137,
-            Chain::Arbitrum => 42161,
-            Chain::Optimism => 10,
-            Chain::Base => 8453,
-            Chain::Avalanche => 43114,
-            Chain::Bsc => 56,
-        }
-    }
-
     /// Returns a default public RPC endpoint (rate-limited, for demo purposes)
     pub fn default_rpc_url(&self) -> &'static str {
         match self {
-            Chain::Ethereum => "https://eth.llamarpc.com",
-            Chain::Polygon => "https://polygon.llamarpc.com",
-            Chain::Arbitrum => "https://arbitrum.llamarpc.com",
-            Chain::Optimism => "https://optimism.llamarpc.com",
-            Chain::Base => "https://base.llamarpc.com",
-            Chain::Avalanche => "https://avalanche.llamarpc.com",
-            Chain::Bsc => "https://bsc.llamarpc.com",
+            Chain::Ethereum => "https://ethereum-rpc.publicnode.com",
+            Chain::Polygon => "https://polygon-bor-rpc.publicnode.com",
+            Chain::Arbitrum => "https://arbitrum-one-rpc.publicnode.com",
+            Chain::Optimism => "https://optimism-rpc.publicnode.com",
+            Chain::Base => "https://base-rpc.publicnode.com",
+            Chain::Avalanche => "https://avalanche-c-chain-rpc.publicnode.com",
+            Chain::Bsc => "https://bsc-rpc.publicnode.com",
         }
     }
 

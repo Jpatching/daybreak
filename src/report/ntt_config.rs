@@ -1,7 +1,6 @@
+use crate::types::FullAnalysis;
 use anyhow::Result;
 use serde::Serialize;
-use std::path::Path;
-use crate::types::FullAnalysis;
 
 /// Generates NTT deployment configuration files
 pub struct NttConfigGenerator;
@@ -50,12 +49,8 @@ impl NttConfigGenerator {
 
         let source_mode = config.recommended_mode.to_string().to_lowercase();
 
-        // Destination is always burning when source is locking
-        let dest_mode = if source_mode == "locking" {
-            "burning"
-        } else {
-            "burning"
-        };
+        // NTT destination is always burning
+        let dest_mode = "burning";
 
         let deployment = DeploymentJson {
             version: "1.0.0",
@@ -91,7 +86,11 @@ impl NttConfigGenerator {
 
     /// Generate NTT CLI commands for deployment
     pub fn generate_cli_commands(analysis: &FullAnalysis) -> Vec<String> {
-        let mode = analysis.compatibility.recommended_mode.to_string().to_lowercase();
+        let mode = analysis
+            .compatibility
+            .recommended_mode
+            .to_string()
+            .to_lowercase();
         let chain = analysis.token.chain.to_string().to_lowercase();
 
         vec![
@@ -118,13 +117,5 @@ impl NttConfigGenerator {
             "# 5. Configure rate limits (adjust as needed)".to_string(),
             "ntt configure-limits --daily-limit 1000000".to_string(),
         ]
-    }
-
-    /// Write deployment.json to file
-    pub async fn write_deployment_json(analysis: &FullAnalysis, output_dir: &Path) -> Result<()> {
-        let content = Self::generate_deployment_json(analysis)?;
-        let path = output_dir.join("deployment.json");
-        tokio::fs::write(&path, content).await?;
-        Ok(())
     }
 }

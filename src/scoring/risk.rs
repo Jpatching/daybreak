@@ -1,5 +1,5 @@
 use crate::types::{
-    BytecodeAnalysis, BytecodeComplexity, BridgeStatus, HolderData, RiskComponents, RiskScore,
+    BridgeStatus, BytecodeAnalysis, BytecodeComplexity, HolderData, RiskComponents, RiskScore,
     TokenCapabilities, TokenInfo,
 };
 

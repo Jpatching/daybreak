@@ -20,16 +20,15 @@ impl AbiDecoder {
 
         // If it fits in u64, fast path
         if trimmed.len() <= 16 {
-            let value = u64::from_str_radix(trimmed, 16)
-                .context("Failed to parse uint256")?;
+            let value = u64::from_str_radix(trimmed, 16).context("Failed to parse uint256")?;
             return Ok(value.to_string());
         }
 
         // For large numbers: convert hex to decimal using u128 chunks
         // Split into high and low 128-bit halves if needed
         if trimmed.len() <= 32 {
-            let value = u128::from_str_radix(trimmed, 16)
-                .context("Failed to parse uint256 as u128")?;
+            let value =
+                u128::from_str_radix(trimmed, 16).context("Failed to parse uint256 as u128")?;
             return Ok(value.to_string());
         }
 
@@ -107,8 +106,8 @@ impl AbiDecoder {
         // Skip offset (first 32 bytes = 64 hex chars)
         // Read length (next 32 bytes)
         let length_hex = &hex[64..128];
-        let length = usize::from_str_radix(length_hex.trim_start_matches('0').max("0"), 16)
-            .unwrap_or(0);
+        let length =
+            usize::from_str_radix(length_hex.trim_start_matches('0').max("0"), 16).unwrap_or(0);
 
         if length == 0 {
             return Ok(String::new());
@@ -145,7 +144,7 @@ impl AbiDecoder {
                     None
                 }
             })
-            .filter(|&b| b >= 0x20 && b < 0x7f) // Printable ASCII
+            .filter(|b| (0x20..0x7f).contains(b)) // Printable ASCII
             .collect();
 
         Ok(String::from_utf8_lossy(&bytes).trim().to_string())

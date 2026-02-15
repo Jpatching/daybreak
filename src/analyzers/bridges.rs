@@ -1,31 +1,12 @@
-use anyhow::Result;
-use reqwest::Client;
-use serde::Deserialize;
 use crate::types::{BridgeStatus, Chain};
+use anyhow::Result;
 
 /// Detects existing bridges for a token
-pub struct BridgeDetector {
-    client: Client,
-}
-
-#[derive(Deserialize)]
-struct JupiterToken {
-    address: String,
-    #[serde(default)]
-    extensions: Option<JupiterExtensions>,
-}
-
-#[derive(Deserialize)]
-struct JupiterExtensions {
-    #[serde(rename = "coingeckoId")]
-    coingecko_id: Option<String>,
-}
+pub struct BridgeDetector;
 
 impl BridgeDetector {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self {}
     }
 
     /// Check if token already exists on Solana via various bridges
@@ -117,6 +98,6 @@ impl BridgeDetector {
 
 impl Default for BridgeDetector {
     fn default() -> Self {
-        Self::new()
+        Self
     }
 }

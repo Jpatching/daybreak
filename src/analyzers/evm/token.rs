@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
-use crate::types::{Chain, TokenInfo};
 use super::decoder::AbiDecoder;
 use super::rpc::EvmRpcClient;
+use crate::types::{Chain, TokenInfo};
+use anyhow::{Context, Result};
 
 /// Function selectors for ERC-20 methods
 pub mod selectors {
