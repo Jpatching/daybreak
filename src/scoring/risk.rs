@@ -27,23 +27,24 @@ impl RiskScorer {
     }
 
     /// Score decimal handling complexity (0-20 points)
-    /// >8 decimals requires trimming for SPL tokens
+    /// Gradual scale based on how much trimming NTT needs
     fn score_decimals(decimals: u8) -> u8 {
-        if decimals <= 8 {
-            0 // Perfect for Solana
-        } else if decimals <= 9 {
-            5 // Minor adjustment needed
-        } else if decimals <= 12 {
-            10 // Moderate trimming
-        } else if decimals <= 15 {
-            15 // Significant trimming
-        } else {
-            20 // Maximum trimming (18 decimals like most ERC-20s)
+        match decimals {
+            0..=8 => 0,   // No trimming needed
+            9 => 3,       // Minimal trimming
+            10..=12 => 8, // Moderate trimming
+            13..=15 => 14, // Significant trimming
+            _ => 20,      // Maximum trimming (16-18 decimals)
         }
     }
 
     /// Score token features risk (0-25 points)
     fn score_features(capabilities: &TokenCapabilities, bytecode: &BytecodeAnalysis) -> u8 {
+        // Rebasing = catastrophic for NTT bridging, instant max
+        if capabilities.is_rebasing {
+            return 25;
+        }
+
         let mut score = 0u8;
 
         // Fee-on-transfer is highly problematic for bridges
@@ -88,8 +89,15 @@ impl RiskScorer {
     /// Score holder concentration risk (0-15 points)
     fn score_holders(holder_data: Option<&HolderData>) -> u8 {
         match holder_data {
-            None => 0, // No data = no penalty
+            None => 5, // Missing data = unknown risk, not zero
             Some(data) => {
+                // Check if top-1 holder dominates
+                if let Some(top) = data.top_holders.first() {
+                    if top.percentage > 50.0 {
+                        return 15; // Single entity controls majority
+                    }
+                }
+
                 let concentration = data.top_10_concentration;
                 if concentration < 50.0 {
                     0 // Well distributed
@@ -138,7 +146,9 @@ mod tests {
     fn test_decimals_scoring() {
         assert_eq!(RiskScorer::score_decimals(6), 0);
         assert_eq!(RiskScorer::score_decimals(8), 0);
-        assert_eq!(RiskScorer::score_decimals(9), 5);
+        assert_eq!(RiskScorer::score_decimals(9), 3);
+        assert_eq!(RiskScorer::score_decimals(12), 8);
+        assert_eq!(RiskScorer::score_decimals(15), 14);
         assert_eq!(RiskScorer::score_decimals(18), 20);
     }
 
@@ -151,6 +161,8 @@ mod tests {
 
         let score = RiskScorer::calculate(&token, &capabilities, &bytecode, &bridge_status, None);
 
+        // Missing holder data now adds 5 points (unknown risk penalty)
+        assert_eq!(score.components.holder_concentration, 5);
         assert!(score.total <= 33);
         assert_eq!(score.rating, crate::types::RiskRating::Low);
     }

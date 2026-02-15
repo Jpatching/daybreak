@@ -110,9 +110,13 @@ impl MarkdownGenerator {
             Self::bool_emoji(analysis.capabilities.has_blacklist)
         ));
         md.push_str(&format!(
-            "| Upgradeable | {} |\n\n",
+            "| Upgradeable | {} |\n",
             Self::bool_emoji(analysis.capabilities.is_upgradeable)
         ));
+        if analysis.capabilities.is_rebasing {
+            md.push_str("| **Rebasing** | **Yes ⚠️** |\n");
+        }
+        md.push('\n');
 
         // Bytecode Analysis
         md.push_str("## Bytecode Analysis\n\n");
@@ -141,6 +145,55 @@ impl MarkdownGenerator {
             md.push_str("- **Warning**: Fee-on-transfer pattern detected\n");
         }
         md.push('\n');
+
+        // Holder Distribution
+        md.push_str("## Holder Distribution\n\n");
+        match &analysis.holder_data {
+            Some(data) => {
+                md.push_str(&format!(
+                    "Top-10 concentration: **{:.1}%**\n\n",
+                    data.top_10_concentration
+                ));
+                if !data.top_holders.is_empty() {
+                    md.push_str("| # | Address | Percentage |\n");
+                    md.push_str("|---|---------|------------|\n");
+                    let show = data.top_holders.len().min(10);
+                    for (i, holder) in data.top_holders[..show].iter().enumerate() {
+                        let addr = if holder.address.len() > 12 {
+                            format!(
+                                "`{}...{}`",
+                                &holder.address[..6],
+                                &holder.address[holder.address.len() - 4..]
+                            )
+                        } else {
+                            format!("`{}`", holder.address)
+                        };
+                        md.push_str(&format!(
+                            "| {} | {} | {:.2}% |\n",
+                            i + 1,
+                            addr,
+                            holder.percentage
+                        ));
+                    }
+                    md.push('\n');
+
+                    if let Some(top) = data.top_holders.first() {
+                        if top.percentage > 50.0 {
+                            md.push_str(&format!(
+                                "> ⚠️ **Concentration Risk**: Top holder controls {:.1}% of supply\n\n",
+                                top.percentage
+                            ));
+                        }
+                    }
+                }
+            }
+            None => {
+                md.push_str(
+                    "*Holder data unavailable. Run with `--etherscan-key` for distribution analysis. \
+                     Missing data adds a small penalty to the risk score.*\n\n",
+                );
+            }
+        }
 
         // Compatibility Issues
         if !analysis.compatibility.issues.is_empty() {
