@@ -141,6 +141,7 @@ impl NttConfigGenerator {
     }
 
     /// Generate NTT CLI commands for deployment
+    #[allow(clippy::vec_init_then_push)]
     pub fn generate_cli_commands(analysis: &FullAnalysis) -> Vec<String> {
         let mode = analysis
             .compatibility
@@ -217,5 +218,105 @@ impl NttConfigGenerator {
         cmds.push("ntt transfer --amount 1 --to <SOLANA_ADDRESS>".to_string());
 
         cmds
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyzers::volume::RateLimitRecommendation;
+    use crate::types::{
+        BridgeStatus, BytecodeAnalysis, Chain, CompatibilityResult, NttMode, RiskComponents,
+        RiskRating, RiskScore, TokenCapabilities, TokenInfo,
+    };
+
+    /// Build a minimal FullAnalysis for testing
+    fn sample_analysis(
+        decimals: u8,
+        mode: NttMode,
+        rate_limit: Option<RateLimitRecommendation>,
+    ) -> FullAnalysis {
+        FullAnalysis {
+            token: TokenInfo {
+                address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".to_string(),
+                chain: Chain::Ethereum,
+                name: "USD Coin".to_string(),
+                symbol: "USDC".to_string(),
+                decimals,
+                total_supply: "1000000000".to_string(),
+            },
+            capabilities: TokenCapabilities::default(),
+            bytecode: BytecodeAnalysis::default(),
+            compatibility: CompatibilityResult {
+                is_compatible: true,
+                recommended_mode: mode,
+                issues: vec![],
+                decimal_trimming_required: decimals > 8,
+                solana_decimals: decimals.min(8),
+            },
+            bridge_status: BridgeStatus::default(),
+            risk_score: RiskScore {
+                total: 5,
+                rating: RiskRating::Low,
+                components: RiskComponents::default(),
+            },
+            holder_data: None,
+            rate_limit,
+        }
+    }
+
+    #[test]
+    fn test_deployment_json_valid_and_dest_burning() {
+        let analysis = sample_analysis(18, NttMode::Locking, None);
+        let json_str = NttConfigGenerator::generate_deployment_json(&analysis).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        // Destination mode is always "burning"
+        assert_eq!(parsed["chains"]["destination"]["token"]["mode"], "burning");
+        // Source mode matches recommended
+        assert_eq!(parsed["chains"]["source"]["token"]["mode"], "locking");
+        // Decimals mapping: 18 → 8
+        assert_eq!(parsed["chains"]["source"]["token"]["decimals"], 18);
+        assert_eq!(parsed["chains"]["destination"]["token"]["decimals"], 8);
+    }
+
+    #[test]
+    fn test_cli_commands_contain_token_and_mode() {
+        let analysis = sample_analysis(6, NttMode::Burning, None);
+        let cmds = NttConfigGenerator::generate_cli_commands(&analysis);
+
+        let joined = cmds.join("\n");
+        assert!(joined.contains(&analysis.token.address));
+        assert!(joined.contains("burning"));
+        // Should have shebang, ntt init, add-chain ×2, deploy, configure-limits, authorize, transfer
+        assert!(cmds.len() >= 10);
+    }
+
+    #[test]
+    fn test_rate_limit_fallback_defaults() {
+        let analysis = sample_analysis(6, NttMode::Locking, None);
+        let json_str = NttConfigGenerator::generate_deployment_json(&analysis).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        // No rate_limit → fallback to 1M / 100K
+        assert_eq!(parsed["rate_limits"]["daily_limit"], 1_000_000);
+        assert_eq!(parsed["rate_limits"]["per_transaction_limit"], 100_000);
+    }
+
+    #[test]
+    fn test_rate_limit_custom_values() {
+        let rl = RateLimitRecommendation {
+            daily_transfers: 500,
+            recommended_daily_limit: 5_000_000,
+            recommended_per_tx_limit: 500_000,
+            reasoning: "test".to_string(),
+            high_volume_warning: false,
+        };
+        let analysis = sample_analysis(6, NttMode::Locking, Some(rl));
+        let json_str = NttConfigGenerator::generate_deployment_json(&analysis).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(parsed["rate_limits"]["daily_limit"], 5_000_000);
+        assert_eq!(parsed["rate_limits"]["per_transaction_limit"], 500_000);
     }
 }

@@ -155,6 +155,8 @@ impl AbiDecoder {
 mod tests {
     use super::*;
 
+    // ── uint8 ──────────────────────────────────────────────
+
     #[test]
     fn test_decode_uint8() {
         // Standard 32-byte padded response for decimals = 18
@@ -166,5 +168,93 @@ mod tests {
     fn test_decode_uint8_six() {
         let hex = "0x0000000000000000000000000000000000000000000000000000000000000006";
         assert_eq!(AbiDecoder::decode_uint8(hex).unwrap(), 6);
+    }
+
+    #[test]
+    fn test_decode_uint8_zero() {
+        let hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        assert_eq!(AbiDecoder::decode_uint8(hex).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_decode_uint8_empty() {
+        assert_eq!(AbiDecoder::decode_uint8("0x").unwrap(), 0);
+        assert_eq!(AbiDecoder::decode_uint8("").unwrap(), 0);
+    }
+
+    // ── uint256 ────────────────────────────────────────────
+
+    #[test]
+    fn test_decode_uint256_zero() {
+        let hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        assert_eq!(AbiDecoder::decode_uint256(hex).unwrap(), "0");
+    }
+
+    #[test]
+    fn test_decode_uint256_small() {
+        // 1000000 in hex = 0xF4240
+        let hex = "0x00000000000000000000000000000000000000000000000000000000000f4240";
+        assert_eq!(AbiDecoder::decode_uint256(hex).unwrap(), "1000000");
+    }
+
+    #[test]
+    fn test_decode_uint256_u64_boundary() {
+        // u64::MAX = 18446744073709551615 = 0xFFFFFFFFFFFFFFFF (16 hex chars)
+        let hex = "0x000000000000000000000000000000000000000000000000ffffffffffffffff";
+        assert_eq!(
+            AbiDecoder::decode_uint256(hex).unwrap(),
+            "18446744073709551615"
+        );
+    }
+
+    #[test]
+    fn test_decode_uint256_u128_range() {
+        // A value that exceeds u64 but fits in u128
+        // 10^20 = 100000000000000000000 = 0x56BC75E2D63100000 (17 hex chars)
+        let hex = "0x0000000000000000000000000000000000000000000000056bc75e2d63100000";
+        assert_eq!(
+            AbiDecoder::decode_uint256(hex).unwrap(),
+            "100000000000000000000"
+        );
+    }
+
+    #[test]
+    fn test_decode_uint256_large_hex_to_decimal() {
+        // Exercises hex_to_decimal: value > 128 bits
+        // 2^160 = 1461501637330902918203684832716283019655932542976
+        // hex: 10000000000000000000000000000000000000000 (41 hex chars after trim)
+        let hex = "0x0000000000000000000000010000000000000000000000000000000000000000";
+        let result = AbiDecoder::decode_uint256(hex).unwrap();
+        assert_eq!(result, "1461501637330902918203684832716283019655932542976");
+    }
+
+    // ── string ─────────────────────────────────────────────
+
+    #[test]
+    fn test_decode_string_standard() {
+        // ABI-encoded "USDC": offset=0x20, length=4, data="USDC" padded
+        let hex = "0x\
+            0000000000000000000000000000000000000000000000000000000000000020\
+            0000000000000000000000000000000000000000000000000000000000000004\
+            5553444300000000000000000000000000000000000000000000000000000000";
+        assert_eq!(AbiDecoder::decode_string(hex).unwrap(), "USDC");
+    }
+
+    #[test]
+    fn test_decode_string_empty() {
+        // ABI-encoded empty string: offset=0x20, length=0
+        let hex = "0x\
+            0000000000000000000000000000000000000000000000000000000000000020\
+            0000000000000000000000000000000000000000000000000000000000000000";
+        assert_eq!(AbiDecoder::decode_string(hex).unwrap(), "");
+    }
+
+    #[test]
+    fn test_decode_string_short_fallback() {
+        // Non-standard short response — triggers extract_ascii fallback
+        // "MKR" in hex = 4d4b52
+        let hex = "4d4b5200000000000000000000000000000000000000000000000000000000";
+        let result = AbiDecoder::decode_string(hex).unwrap();
+        assert!(result.contains("MKR"));
     }
 }

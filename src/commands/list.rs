@@ -44,12 +44,7 @@ pub async fn run_list(
         discovery.curated_fallback(max_tokens)
     };
 
-    let source = if discover
-        && discovered
-            .first()
-            .and_then(|t| t.market_cap_rank)
-            .is_some()
-    {
+    let source = if discover && discovered.first().and_then(|t| t.market_cap_rank).is_some() {
         "CoinGecko"
     } else {
         "curated list"
