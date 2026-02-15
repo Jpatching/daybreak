@@ -19,6 +19,9 @@ impl CompatibilityChecker {
         let (decimal_trimming_required, solana_decimals) =
             Self::check_decimals(token.decimals, &mut issues);
 
+        // Check rebasing — catastrophic for NTT bridging
+        Self::check_rebasing(capabilities, &mut issues);
+
         // Check token features
         Self::check_features(capabilities, bytecode, &mut issues);
 
@@ -64,6 +67,28 @@ impl CompatibilityChecker {
             (true, max_solana_decimals)
         } else {
             (false, decimals)
+        }
+    }
+
+    /// Rebasing tokens change balances without transfers — locked tokens desync from minted tokens
+    fn check_rebasing(
+        capabilities: &TokenCapabilities,
+        issues: &mut Vec<CompatibilityIssue>,
+    ) {
+        if capabilities.is_rebasing {
+            issues.push(CompatibilityIssue {
+                severity: IssueSeverity::Error,
+                code: "REBASING".to_string(),
+                title: "Rebasing Token Detected".to_string(),
+                description: "This token rebases (adjusts balances without transfers). \
+                    When bridged via NTT in locking mode, locked tokens on the source chain \
+                    will desync from minted tokens on Solana, causing loss of funds."
+                    .to_string(),
+                recommendation: "Rebasing tokens are incompatible with NTT. Consider \
+                    wrapping the token in a non-rebasing wrapper (e.g. wstETH for stETH) \
+                    before bridging."
+                    .to_string(),
+            });
         }
     }
 

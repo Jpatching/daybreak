@@ -28,6 +28,13 @@ impl TerminalOutput {
         Self::print_capability("Blacklist", analysis.capabilities.has_blacklist);
         Self::print_capability("Permit (EIP-2612)", analysis.capabilities.has_permit);
         Self::print_capability("Upgradeable", analysis.capabilities.is_upgradeable);
+        if analysis.capabilities.is_rebasing {
+            println!(
+                "  {:<18} {}",
+                "Rebasing",
+                "Yes ✗".red().bold()
+            );
+        }
 
         // Bytecode analysis
         Self::print_section("Bytecode Analysis");
@@ -58,6 +65,9 @@ impl TerminalOutput {
         } else {
             println!("  {} No existing Solana presence", "✓".green());
         }
+
+        // Holder distribution
+        Self::print_holder_distribution(analysis);
 
         // Compatibility
         Self::print_section("NTT Compatibility");
@@ -254,6 +264,58 @@ impl TerminalOutput {
         );
         println!();
         println!("  {}", "Powered by Wormhole NTT via Sunrise".dimmed());
+    }
+
+    fn print_holder_distribution(analysis: &FullAnalysis) {
+        Self::print_section("Holder Distribution");
+        match &analysis.holder_data {
+            Some(data) => {
+                println!(
+                    "  Top-10 concentration: {:.1}%",
+                    data.top_10_concentration
+                );
+                if let Some(total) = data.total_holders {
+                    println!("  Total holders:       {}", total);
+                }
+
+                // Show top-5 holders
+                if !data.top_holders.is_empty() {
+                    println!();
+                    let show = data.top_holders.len().min(5);
+                    for (i, holder) in data.top_holders[..show].iter().enumerate() {
+                        let addr = if holder.address.len() > 12 {
+                            format!("{}...{}", &holder.address[..6], &holder.address[holder.address.len()-4..])
+                        } else {
+                            holder.address.clone()
+                        };
+                        println!(
+                            "  {}. {} — {:.2}%",
+                            i + 1,
+                            addr.cyan(),
+                            holder.percentage
+                        );
+                    }
+                }
+
+                // Concentration warning
+                if let Some(top) = data.top_holders.first() {
+                    if top.percentage > 50.0 {
+                        println!();
+                        println!(
+                            "  {} Top holder controls {:.1}% of supply",
+                            "⚠".yellow(),
+                            top.percentage
+                        );
+                    }
+                }
+            }
+            None => {
+                println!(
+                    "  {}",
+                    "Unavailable (requires Etherscan API key via --etherscan-key)".dimmed()
+                );
+            }
+        }
     }
 
     fn print_path(path: &MigrationPath) {
