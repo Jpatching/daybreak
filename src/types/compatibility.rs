@@ -59,38 +59,11 @@ pub struct CompatibilityResult {
     pub solana_decimals: u8,
 }
 
-impl CompatibilityResult {
-    pub fn error_count(&self) -> usize {
-        self.issues
-            .iter()
-            .filter(|i| i.severity == IssueSeverity::Error)
-            .count()
-    }
-
-    pub fn warning_count(&self) -> usize {
-        self.issues
-            .iter()
-            .filter(|i| i.severity == IssueSeverity::Warning)
-            .count()
-    }
-}
-
 /// Existing bridge detection results
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BridgeStatus {
     pub already_on_solana: bool,
     pub solana_address: Option<String>,
     pub bridge_provider: Option<String>,
     pub wormhole_attested: bool,
-}
-
-impl Default for BridgeStatus {
-    fn default() -> Self {
-        Self {
-            already_on_solana: false,
-            solana_address: None,
-            bridge_provider: None,
-            wormhole_attested: false,
-        }
-    }
 }

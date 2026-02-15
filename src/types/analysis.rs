@@ -114,7 +114,7 @@ impl std::fmt::Display for RiskRating {
 }
 
 /// Individual risk score components
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RiskComponents {
     /// 0-20 points: >8 decimals adds complexity
     pub decimal_handling: u8,
@@ -126,18 +126,6 @@ pub struct RiskComponents {
     pub holder_concentration: u8,
     /// 0-20 points: already bridged = coordination needed
     pub bridge_status: u8,
-}
-
-impl Default for RiskComponents {
-    fn default() -> Self {
-        Self {
-            decimal_handling: 0,
-            token_features: 0,
-            bytecode_complexity: 0,
-            holder_concentration: 0,
-            bridge_status: 0,
-        }
-    }
 }
 
 /// Composite risk score for migration

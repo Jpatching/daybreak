@@ -215,10 +215,7 @@ mod tests {
 
         assert!(result.decimal_trimming_required);
         assert_eq!(result.solana_decimals, 8);
-        assert!(result
-            .issues
-            .iter()
-            .any(|i| i.code == "DECIMAL_TRIM"));
+        assert!(result.issues.iter().any(|i| i.code == "DECIMAL_TRIM"));
     }
 
     #[test]
@@ -237,8 +234,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result =
-            CompatibilityChecker::check(&token, &TokenCapabilities::default(), &bytecode);
+        let result = CompatibilityChecker::check(&token, &TokenCapabilities::default(), &bytecode);
 
         assert!(!result.is_compatible);
         assert!(result

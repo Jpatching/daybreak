@@ -1,7 +1,7 @@
+use crate::types::{Chain, HolderData, HolderInfo};
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::Deserialize;
-use crate::types::{Chain, HolderData, HolderInfo};
 
 /// Fetches holder data from block explorers
 pub struct HolderAnalyzer {
@@ -61,8 +61,8 @@ impl HolderAnalyzer {
             );
         }
 
-        let holders: Vec<EtherscanHolder> = serde_json::from_value(response.result)
-            .context("Failed to parse holder list")?;
+        let holders: Vec<EtherscanHolder> =
+            serde_json::from_value(response.result).context("Failed to parse holder list")?;
 
         self.calculate_concentration(holders).await
     }
