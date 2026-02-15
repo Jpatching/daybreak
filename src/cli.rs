@@ -72,4 +72,38 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Deploy SPL token on Solana matching an EVM token
+    Deploy {
+        /// Token contract address (0x...)
+        #[arg(value_name = "ADDRESS")]
+        address: String,
+
+        /// Source chain
+        #[arg(short, long, default_value = "ethereum")]
+        chain: String,
+
+        /// Solana network: devnet or mainnet
+        #[arg(long, default_value = "devnet")]
+        network: String,
+
+        /// Path to Solana keypair JSON file
+        #[arg(long, default_value = "~/.config/solana/id.json")]
+        keypair: String,
+    },
+
+    /// Discover migration-ready ERC-20 tokens for Solana
+    List {
+        /// Source chain
+        #[arg(short, long, default_value = "ethereum")]
+        chain: String,
+
+        /// Limit number of tokens to scan
+        #[arg(short, long)]
+        limit: Option<usize>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
