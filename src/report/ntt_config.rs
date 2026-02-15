@@ -10,6 +10,14 @@ struct DeploymentJson {
     version: &'static str,
     network: NetworkSection,
     chains: ChainsSection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rate_limits: Option<RateLimitsSection>,
+}
+
+#[derive(Serialize)]
+struct RateLimitsSection {
+    daily_limit: u64,
+    per_transaction_limit: u64,
 }
 
 #[derive(Serialize)]
@@ -52,11 +60,17 @@ impl NttConfigGenerator {
         // NTT destination is always burning
         let dest_mode = "burning";
 
+        let rate_limits = analysis.rate_limit.as_ref().map(|rl| RateLimitsSection {
+            daily_limit: rl.recommended_daily_limit,
+            per_transaction_limit: rl.recommended_per_tx_limit,
+        });
+
         let deployment = DeploymentJson {
             version: "1.0.0",
             network: NetworkSection {
                 network_type: "mainnet",
             },
+            rate_limits,
             chains: ChainsSection {
                 source: ChainConfig {
                     chain: analysis.token.chain.to_string().to_lowercase(),
@@ -93,7 +107,13 @@ impl NttConfigGenerator {
             .to_lowercase();
         let chain = analysis.token.chain.to_string().to_lowercase();
 
-        vec![
+        let daily_limit = analysis
+            .rate_limit
+            .as_ref()
+            .map(|r| r.recommended_daily_limit)
+            .unwrap_or(1_000_000);
+
+        let mut cmds = vec![
             "# NTT Deployment Commands".to_string(),
             "".to_string(),
             "# 1. Initialize project".to_string(),
@@ -114,8 +134,33 @@ impl NttConfigGenerator {
             "# 4. Deploy contracts".to_string(),
             "ntt deploy".to_string(),
             "".to_string(),
-            "# 5. Configure rate limits (adjust as needed)".to_string(),
-            "ntt configure-limits --daily-limit 1000000".to_string(),
-        ]
+        ];
+
+        // Rate limit command with calculated or fallback value
+        if let Some(ref rl) = analysis.rate_limit {
+            cmds.push(format!(
+                "# 5. Configure rate limits (based on {} daily transfers)",
+                rl.daily_transfers
+            ));
+            cmds.push(format!(
+                "ntt configure-limits --daily-limit {}",
+                rl.recommended_daily_limit
+            ));
+        } else {
+            cmds.push("# 5. Configure rate limits (adjust based on expected volume)".to_string());
+            cmds.push(format!("ntt configure-limits --daily-limit {}", daily_limit));
+        }
+
+        // Post-deploy: transfer mint authority
+        cmds.push("".to_string());
+        cmds.push("# 6. Transfer SPL mint authority to NTT manager (REQUIRED for bridging)".to_string());
+        cmds.push("# Replace <NTT_MANAGER> with the address from `ntt deploy` output".to_string());
+        cmds.push("spl-token authorize <SPL_MINT> mint <NTT_MANAGER>".to_string());
+
+        cmds.push("".to_string());
+        cmds.push("# 7. Test transfer".to_string());
+        cmds.push("ntt transfer --amount 1 --to <SOLANA_ADDRESS>".to_string());
+
+        cmds
     }
 }

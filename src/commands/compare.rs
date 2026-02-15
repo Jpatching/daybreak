@@ -40,6 +40,7 @@ pub async fn run_compare(
         bridge_status,
         risk_score,
         holder_data: None,
+        rate_limit: None,
     };
 
     // Compare paths

@@ -112,4 +112,5 @@ pub struct FullAnalysis {
     pub bridge_status: super::BridgeStatus,
     pub risk_score: super::RiskScore,
     pub holder_data: Option<super::HolderData>,
+    pub rate_limit: Option<crate::analyzers::volume::RateLimitRecommendation>,
 }
