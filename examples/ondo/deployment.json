@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "network": {
+    "type": "mainnet"
+  },
+  "chains": {
+    "source": {
+      "chain": "ethereum",
+      "token": {
+        "address": "0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3",
+        "decimals": 18,
+        "mode": "burning"
+      }
+    },
+    "destination": {
+      "chain": "solana",
+      "token": {
+        "decimals": 8,
+        "mode": "burning"
+      }
+    }
+  }
+}
