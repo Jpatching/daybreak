@@ -108,6 +108,45 @@ impl SolanaDeployer {
         })
     }
 
+    /// Transfer mint authority to a new address (e.g. NTT manager)
+    pub fn transfer_mint_authority(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        new_authority: &str,
+    ) -> Result<()> {
+        let new_authority_pubkey: Pubkey = new_authority
+            .parse()
+            .context("Invalid Solana address for new authority")?;
+
+        let ix = spl_token::instruction::set_authority(
+            &spl_token::id(),
+            mint,
+            Some(&new_authority_pubkey),
+            spl_token::instruction::AuthorityType::MintTokens,
+            &payer.pubkey(),
+            &[],
+        )?;
+
+        let recent_blockhash = self
+            .client
+            .get_latest_blockhash()
+            .context("Failed to get recent blockhash")?;
+
+        let tx = Transaction::new_signed_with_payer(
+            &[ix],
+            Some(&payer.pubkey()),
+            &[payer],
+            recent_blockhash,
+        );
+
+        self.client
+            .send_and_confirm_transaction(&tx)
+            .context("Failed to transfer mint authority")?;
+
+        Ok(())
+    }
+
     /// Check payer balance
     pub fn get_balance(&self, pubkey: &Pubkey) -> Result<f64> {
         let lamports = self.client.get_balance(pubkey)?;

@@ -89,6 +89,46 @@ impl MarkdownGenerator {
             analysis.token.chain
         ));
 
+        // Rate Limit Recommendation
+        md.push_str("## Rate Limit Recommendation\n\n");
+        match &analysis.rate_limit {
+            Some(rl) => {
+                md.push_str("| Parameter | Value |\n");
+                md.push_str("|-----------|-------|\n");
+                md.push_str(&format!(
+                    "| Daily inbound limit | {} tokens |\n",
+                    rl.recommended_daily_limit
+                ));
+                md.push_str(&format!(
+                    "| Per-transaction limit | {} tokens |\n",
+                    rl.recommended_per_tx_limit
+                ));
+                if rl.daily_transfers > 0 {
+                    md.push_str(&format!(
+                        "| Observed daily transfers | ~{} |\n",
+                        rl.daily_transfers
+                    ));
+                }
+                md.push_str(&format!(
+                    "| High volume warning | {} |\n\n",
+                    if rl.high_volume_warning { "Yes" } else { "No" }
+                ));
+                md.push_str(&format!("> {}\n\n", rl.reasoning));
+                if rl.high_volume_warning {
+                    md.push_str(
+                        "> ⚠️ **High-volume token**: Consider setting tighter per-transaction limits \
+                         to prevent large single-transfer exploits.\n\n",
+                    );
+                }
+            }
+            None => {
+                md.push_str(
+                    "*Rate limit data unavailable. Run with `--etherscan-key` for volume-based \
+                     rate limit recommendations. Using default: 1,000,000 tokens/day.*\n\n",
+                );
+            }
+        }
+
         // Token Capabilities
         md.push_str("## Token Capabilities\n\n");
         md.push_str("| Feature | Status |\n");
@@ -193,6 +233,46 @@ impl MarkdownGenerator {
                      Missing data adds a small penalty to the risk score.*\n\n",
                 );
             }
+        }
+
+        // Decimal Migration
+        if analysis.compatibility.decimal_trimming_required {
+            let evm_dec = analysis.token.decimals;
+            let sol_dec = analysis.compatibility.solana_decimals;
+            let trimmed = evm_dec - sol_dec;
+            let kept: String = (0..sol_dec).map(|i| char::from(b'1' + (i % 9))).collect();
+            let dust: String = (0..trimmed).map(|i| char::from(b'1' + ((sol_dec + i) % 9))).collect();
+            let max_loss = 1.0 / 10f64.powi(sol_dec as i32);
+
+            md.push_str("## Decimal Migration\n\n");
+            md.push_str(&format!(
+                "NTT caps SPL tokens at 8 decimals. This token uses {} decimals, so amounts are trimmed to {}.\n\n",
+                evm_dec, sol_dec
+            ));
+            md.push_str("**Worked example:**\n\n");
+            md.push_str("| | Value |\n");
+            md.push_str("|--|-------|\n");
+            md.push_str(&format!(
+                "| EVM amount | `1.{}{}` |\n",
+                kept, dust
+            ));
+            md.push_str(&format!(
+                "| Solana amount | `1.{}` |\n",
+                kept
+            ));
+            md.push_str(&format!(
+                "| Dust (locked) | `0.{}{}` |\n",
+                "0".repeat(sol_dec as usize),
+                dust
+            ));
+            md.push_str(&format!(
+                "| Max precision loss | < {} tokens per transfer |\n\n",
+                max_loss
+            ));
+            md.push_str(
+                "> Dust is **locked** on the source chain, not destroyed. \
+                 It can be recovered if the token is bridged back.\n\n",
+            );
         }
 
         // Compatibility Issues

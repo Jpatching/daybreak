@@ -205,6 +205,7 @@ async fn analyze_token(
         bridge_status,
         risk_score,
         holder_data: None,
+        rate_limit: None,
     })
 }
 

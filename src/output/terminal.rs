@@ -77,6 +77,9 @@ impl TerminalOutput {
         Self::print_section("Risk Score");
         Self::print_risk_score(analysis);
 
+        // Rate limit recommendation
+        Self::print_rate_limit(analysis);
+
         // Verdict
         Self::print_verdict(analysis);
 
@@ -146,6 +149,31 @@ impl TerminalOutput {
                 evm_decimals,
                 compat.solana_decimals,
                 "(trimming required)".yellow()
+            );
+
+            // Worked example showing precision loss
+            let trimmed_digits = evm_decimals - compat.solana_decimals;
+            let example_whole = "1";
+            let kept: String = (0..compat.solana_decimals).map(|i| char::from(b'1' + (i % 9))).collect();
+            let dust: String = (0..trimmed_digits).map(|i| char::from(b'1' + ((compat.solana_decimals + i) % 9))).collect();
+            println!(
+                "  Example:    {}.{}{} → {}.{}",
+                example_whole,
+                kept,
+                dust.dimmed(),
+                example_whole,
+                kept
+            );
+            println!(
+                "  Dust:       0.{}{} {}",
+                "0".repeat(compat.solana_decimals as usize),
+                dust,
+                "(locked on source chain, not destroyed)".dimmed()
+            );
+            let max_loss = 1.0 / 10f64.powi(compat.solana_decimals as i32);
+            println!(
+                "  Max loss:   < {} tokens per transfer",
+                format!("{}", max_loss).dimmed()
             );
         }
 
@@ -313,6 +341,44 @@ impl TerminalOutput {
                 println!(
                     "  {}",
                     "Unavailable (requires Etherscan API key via --etherscan-key)".dimmed()
+                );
+            }
+        }
+    }
+
+    fn print_rate_limit(analysis: &FullAnalysis) {
+        if !analysis.compatibility.is_compatible {
+            return;
+        }
+        Self::print_section("Rate Limit Recommendation");
+        match &analysis.rate_limit {
+            Some(rl) => {
+                println!(
+                    "  Daily limit:  {} tokens/day",
+                    format!("{}", rl.recommended_daily_limit).cyan()
+                );
+                println!(
+                    "  Per-tx limit: {} tokens",
+                    format!("{}", rl.recommended_per_tx_limit).cyan()
+                );
+                if rl.daily_transfers > 0 {
+                    println!(
+                        "  Based on:     ~{} transfers/day",
+                        rl.daily_transfers
+                    );
+                }
+                if rl.high_volume_warning {
+                    println!(
+                        "  {} High-volume token — consider tighter per-tx limits",
+                        "⚠".yellow()
+                    );
+                }
+                println!("  {}", rl.reasoning.dimmed());
+            }
+            None => {
+                println!(
+                    "  {}",
+                    "Unavailable (provide --etherscan-key for volume-based limits)".dimmed()
                 );
             }
         }

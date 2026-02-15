@@ -19,6 +19,7 @@ pub async fn run_deploy(
     rpc_url: Option<String>,
     network: &str,
     keypair_path: &str,
+    transfer_authority: Option<&str>,
 ) -> Result<()> {
     let chain: Chain = chain.parse()?;
 
@@ -112,6 +113,19 @@ pub async fn run_deploy(
 
     let result = deployer.create_spl_token(&payer, spl_decimals)?;
 
+    let mint_str = result.mint_address.to_string();
+
+    // Transfer mint authority if requested
+    if let Some(new_authority) = transfer_authority {
+        progress("Transferring mint authority...");
+        deployer.transfer_mint_authority(&payer, &result.mint_address, new_authority)?;
+        eprintln!(
+            "  {} Mint authority transferred to {}",
+            "✓".green(),
+            new_authority.cyan()
+        );
+    }
+
     // Print results
     println!();
     println!("{}", "═".repeat(60).bright_blue());
@@ -119,7 +133,7 @@ pub async fn run_deploy(
     println!("{}", "═".repeat(60).bright_blue());
     println!();
     println!("  {} Token mint created", "✅".green());
-    println!("  Mint:     {}", result.mint_address.to_string().cyan());
+    println!("  Mint:     {}", mint_str.cyan());
     println!("  Tx:       {}", result.signature.to_string().dimmed());
     if token.decimals > 9 {
         println!(
@@ -133,11 +147,90 @@ pub async fn run_deploy(
     println!("  Network:  {}", network);
     println!("  Cost:     {:.5} SOL", result.cost_sol);
     println!("  Explorer: {}", result.explorer_url().cyan());
+
+    // Post-deploy instructions
     println!();
+    println!("{}", "── Post-Deploy Steps ──".bright_white());
+    println!();
+
+    if transfer_authority.is_some() {
+        println!("  {} Mint authority already transferred", "✓".green());
+    } else {
+        println!(
+            "  {} Transfer mint authority to NTT manager (required for bridging):",
+            "1.".bright_white()
+        );
+        println!(
+            "     {}",
+            format!(
+                "spl-token authorize {} mint <NTT_MANAGER_ADDRESS>",
+                mint_str
+            )
+            .cyan()
+        );
+    }
     println!(
-        "  {} Use this mint address in your NTT deployment config.",
-        "→".bright_white()
+        "  {} Initialize NTT with this token:",
+        if transfer_authority.is_some() { "1." } else { "2." }.bright_white()
     );
+    println!(
+        "     {}",
+        "ntt init".cyan()
+    );
+    let step_base = if transfer_authority.is_some() { 2 } else { 3 };
+    println!(
+        "  {} Add source chain:",
+        format!("{}.", step_base).bright_white()
+    );
+    println!(
+        "     {}",
+        format!(
+            "ntt add-chain {} --mode {} --token {}",
+            chain.to_string().to_lowercase(),
+            compatibility.recommended_mode.to_string().to_lowercase(),
+            address
+        )
+        .cyan()
+    );
+    println!(
+        "  {} Add Solana as destination:",
+        format!("{}.", step_base + 1).bright_white()
+    );
+    println!(
+        "     {}",
+        format!(
+            "ntt add-chain solana --mode burning --token {} --decimals {}",
+            mint_str, spl_decimals
+        )
+        .cyan()
+    );
+    println!(
+        "  {} Deploy NTT contracts:",
+        format!("{}.", step_base + 2).bright_white()
+    );
+    println!("     {}", "ntt deploy".cyan());
+    println!(
+        "  {} Test transfer:",
+        format!("{}.", step_base + 3).bright_white()
+    );
+    println!(
+        "     {}",
+        "ntt transfer --amount 1 --to <SOLANA_ADDRESS>".cyan()
+    );
+
+    println!();
+    if transfer_authority.is_none() {
+        println!(
+            "  {} {}",
+            "⚠".yellow(),
+            "NTT manager needs mint authority to mint bridged tokens on Solana.".yellow()
+        );
+        println!(
+            "    {}",
+            "Deploy NTT first to get the manager address, then transfer authority.".dimmed()
+        );
+        println!();
+    }
     println!(
         "  {} Apply for Sunrise listing: {}",
         "→".bright_white(),

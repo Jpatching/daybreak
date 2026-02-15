@@ -90,6 +90,10 @@ pub enum Commands {
         /// Path to Solana keypair JSON file
         #[arg(long, default_value = "~/.config/solana/id.json")]
         keypair: String,
+
+        /// Transfer mint authority to a specified address (for NTT manager)
+        #[arg(long)]
+        transfer_authority: Option<String>,
     },
 
     /// Discover migration-ready ERC-20 tokens for Solana

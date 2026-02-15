@@ -1,4 +1,4 @@
-use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer};
+use crate::analyzers::{BridgeDetector, CompatibilityChecker, EvmAnalyzer, HolderAnalyzer, VolumeAnalyzer};
 use crate::output::MarkdownGenerator;
 use crate::report::{MigrationPlanGenerator, NttConfigGenerator};
 use crate::scoring::RiskScorer;
@@ -24,7 +24,8 @@ pub async fn run_report(
     // Initialize analyzers
     let evm = EvmAnalyzer::new(chain, rpc_url);
     let bridge_detector = BridgeDetector::new();
-    let holder_analyzer = HolderAnalyzer::new(etherscan_key);
+    let holder_analyzer = HolderAnalyzer::new(etherscan_key.clone());
+    let volume_analyzer = VolumeAnalyzer::new(etherscan_key);
 
     println!("Analyzing token {}...", address);
 
@@ -49,6 +50,12 @@ pub async fn run_report(
         None
     };
 
+    // Fetch volume data for rate limit recommendations
+    let rate_limit = volume_analyzer
+        .analyze(address, chain, token.decimals, &token.total_supply)
+        .await
+        .ok();
+
     // Calculate risk score
     let risk_score = RiskScorer::calculate(
         &token,
@@ -66,6 +73,7 @@ pub async fn run_report(
         bridge_status,
         risk_score,
         holder_data,
+        rate_limit,
     };
 
     // Generate migration plan
