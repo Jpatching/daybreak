@@ -1,10 +1,11 @@
-mod cli;
-mod types;
 mod analyzers;
-mod scoring;
-mod report;
-mod output;
+mod cli;
 mod commands;
+mod output;
+mod report;
+mod scoring;
+mod solana;
+mod types;
 
 use anyhow::Result;
 use clap::Parser;
@@ -53,6 +54,17 @@ async fn main() -> Result<()> {
             json,
         } => {
             commands::run_compare(&address, &chain, cli.rpc_url, json).await?;
+        }
+        Commands::Deploy {
+            address,
+            chain,
+            network,
+            keypair,
+        } => {
+            commands::run_deploy(&address, &chain, cli.rpc_url, &network, &keypair).await?;
+        }
+        Commands::List { chain, limit, json } => {
+            commands::run_list(&chain, cli.rpc_url, limit, json).await?;
         }
     }
 
