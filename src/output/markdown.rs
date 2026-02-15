@@ -321,6 +321,36 @@ impl MarkdownGenerator {
             }
         }
 
+        // Day-One Liquidity Plan
+        md.push_str("## Day-One Liquidity Plan\n\n");
+        md.push_str(
+            "Sunrise's core value prop is day-one liquidity — tokens arrive as native SPL, \
+             immediately tradeable on Jupiter.\n\n",
+        );
+        md.push_str("### Pool Recommendation\n\n");
+        md.push_str("| Parameter | Recommendation |\n");
+        md.push_str("|-----------|----------------|\n");
+        md.push_str("| DEX | Jupiter (primary) |\n");
+        md.push_str("| Pool type | DLMM (Dynamic Liquidity Market Maker) |\n");
+        md.push_str(
+            "| Why DLMM | Best for new tokens — concentrated liquidity, auto-rebalancing |\n",
+        );
+        md.push_str("| Alternative | CLMM for stable-priced tokens |\n\n");
+
+        md.push_str("### Sunrise Liquidity Checklist\n\n");
+        md.push_str("- [ ] SPL token deployed and verified on Solana Explorer\n");
+        md.push_str("- [ ] NTT bridge fully operational (test transfer completed)\n");
+        md.push_str("- [ ] Initial liquidity pool created on Jupiter\n");
+        md.push_str("- [ ] Pool seeded with initial token + SOL/USDC pair\n");
+        md.push_str("- [ ] Token metadata shows correctly in Phantom/Solflare\n");
+        md.push_str("- [ ] Market maker coordination (if applicable)\n");
+        md.push_str("- [ ] Monitor bridge health post-launch: `daybreak status <SOLANA_MINT>`\n\n");
+
+        md.push_str(
+            "> **Tip**: Sunrise tokens get canonical routing on Jupiter — this means \
+             your token becomes the \"official\" Solana version, not a wrapped variant.\n\n",
+        );
+
         // Pre-Migration Checklist
         md.push_str("## Pre-Migration Checklist\n\n");
         md.push_str("- [ ] Verify token contract ownership/admin access\n");

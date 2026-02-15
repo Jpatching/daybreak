@@ -58,8 +58,17 @@ impl TerminalOutput {
             if let Some(ref provider) = analysis.bridge_status.bridge_provider {
                 println!("  Bridge: {}", provider);
             }
+            if let Some(ref bridge_type) = analysis.bridge_status.bridge_type {
+                println!("  Type:  {}", bridge_type);
+            }
         } else {
             println!("  {} No existing Solana presence", "✓".green());
+            if analysis.bridge_status.wormhole_attested {
+                println!(
+                    "  {} Wormhole attestation detected (token seen on Wormhole network)",
+                    "ℹ".dimmed()
+                );
+            }
         }
 
         // Holder distribution
@@ -269,7 +278,17 @@ impl TerminalOutput {
         println!();
         Self::print_section("Next Steps");
         println!(
-            "  1. Generate migration report:  {}",
+            "  1. {} {}",
+            "One-command migration:".bold(),
+            format!(
+                "daybreak migrate {} --chain {}",
+                analysis.token.address,
+                analysis.token.chain.to_string().to_lowercase()
+            )
+            .cyan()
+        );
+        println!(
+            "  2. Generate report:           {}",
             format!(
                 "daybreak report {} --chain {} -o ./output",
                 analysis.token.address,
@@ -278,16 +297,7 @@ impl TerminalOutput {
             .cyan()
         );
         println!(
-            "  2. Deploy SPL token on devnet: {}",
-            format!(
-                "daybreak deploy {} --chain {}",
-                analysis.token.address,
-                analysis.token.chain.to_string().to_lowercase()
-            )
-            .cyan()
-        );
-        println!(
-            "  3. Apply for Sunrise listing:  {}",
+            "  3. Apply for Sunrise listing: {}",
             "https://www.sunrise.wtf".cyan()
         );
         println!();

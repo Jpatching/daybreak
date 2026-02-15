@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "daybreak")]
 #[command(author = "Daybreak Team")]
-#[command(version = "0.1.0")]
+#[command(version = "0.5.0")]
 #[command(about = "Analyze EVM tokens for Solana migration via Wormhole NTT", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -128,5 +128,43 @@ pub enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Try dynamic discovery via CoinGecko API
+        #[arg(long)]
+        discover: bool,
+    },
+
+    /// End-to-end NTT migration: scan → deploy SPL → configure NTT bridge
+    Migrate {
+        /// Token contract address (0x...)
+        #[arg(value_name = "ADDRESS")]
+        address: String,
+
+        /// Source chain
+        #[arg(short, long, default_value = "ethereum")]
+        chain: String,
+
+        /// Solana network: devnet or mainnet
+        #[arg(long, default_value = "devnet")]
+        network: String,
+
+        /// Path to Solana keypair JSON file
+        #[arg(long, default_value = "~/.config/solana/id.json")]
+        keypair: String,
+
+        /// Skip NTT CLI steps (deploy SPL token only)
+        #[arg(long)]
+        skip_ntt: bool,
+    },
+
+    /// Post-migration bridge health monitor
+    Status {
+        /// Solana SPL token mint address
+        #[arg(value_name = "MINT_ADDRESS")]
+        mint_address: String,
+
+        /// Solana network: devnet or mainnet
+        #[arg(long, default_value = "devnet")]
+        network: String,
     },
 }
