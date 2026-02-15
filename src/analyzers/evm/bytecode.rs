@@ -10,6 +10,12 @@ mod capability_selectors {
     pub const BLACKLIST: &str = "f9f92be4"; // blacklist(address)
     pub const ADD_BLACKLIST: &str = "44337ea1"; // addBlacklist(address)
     pub const PERMIT: &str = "d505accf"; // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
+
+    // Rebasing token selectors — 2+ present = rebasing
+    pub const REBASE: &str = "af14052c"; // rebase()
+    pub const SHARES_OF: &str = "f5eb42dc"; // sharesOf(address)
+    pub const POOLED_ETH_BY_SHARES: &str = "7a28fb88"; // getPooledEthByShares(uint256)
+    pub const TOTAL_SHARES: &str = "3a98ef39"; // totalShares()
 }
 
 /// EVM opcodes of interest
@@ -61,6 +67,17 @@ impl BytecodeAnalyzer {
     pub fn detect_capabilities(&self, bytecode: &str) -> TokenCapabilities {
         let bytecode = bytecode.trim_start_matches("0x").to_lowercase();
 
+        // Rebasing: flag if 2+ rebase-related selectors are present
+        let rebase_hits = [
+            capability_selectors::REBASE,
+            capability_selectors::SHARES_OF,
+            capability_selectors::POOLED_ETH_BY_SHARES,
+            capability_selectors::TOTAL_SHARES,
+        ]
+        .iter()
+        .filter(|s| bytecode.contains(**s))
+        .count();
+
         TokenCapabilities {
             has_mint: bytecode.contains(capability_selectors::MINT),
             has_burn: bytecode.contains(capability_selectors::BURN)
@@ -71,6 +88,7 @@ impl BytecodeAnalyzer {
                 || bytecode.contains(capability_selectors::ADD_BLACKLIST),
             has_permit: bytecode.contains(capability_selectors::PERMIT),
             is_upgradeable: self.detect_proxy(&bytecode).0,
+            is_rebasing: rebase_hits >= 2,
         }
     }
 

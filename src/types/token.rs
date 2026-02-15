@@ -83,4 +83,5 @@ pub struct TokenCapabilities {
     pub has_blacklist: bool,
     pub has_permit: bool,
     pub is_upgradeable: bool,
+    pub is_rebasing: bool,
 }
