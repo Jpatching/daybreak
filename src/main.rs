@@ -80,8 +80,29 @@ async fn main() -> Result<()> {
         } => {
             commands::run_check(&address, &chain, cli.rpc_url, &network, &keypair).await?;
         }
-        Commands::List { chain, limit, json } => {
-            commands::run_list(&chain, cli.rpc_url, limit, json).await?;
+        Commands::List {
+            chain,
+            limit,
+            json,
+            discover,
+        } => {
+            commands::run_list(&chain, cli.rpc_url, limit, json, discover).await?;
+        }
+        Commands::Migrate {
+            address,
+            chain,
+            network,
+            keypair,
+            skip_ntt,
+        } => {
+            commands::run_migrate(&address, &chain, cli.rpc_url, &network, &keypair, skip_ntt)
+                .await?;
+        }
+        Commands::Status {
+            mint_address,
+            network,
+        } => {
+            commands::run_status(&mint_address, &network).await?;
         }
     }
 

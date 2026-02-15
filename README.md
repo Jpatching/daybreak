@@ -1,15 +1,16 @@
 # Daybreak
 
-**Migration planning CLI for moving EVM tokens to Solana via [Sunrise](https://wormhole.com/products/ntt) (Wormhole NTT).**
+**End-to-end migration CLI for moving EVM tokens to Solana via [Sunrise](https://wormhole.com/products/ntt) (Wormhole NTT).**
 
 [![CI](https://github.com/Jpatching/daybreak/actions/workflows/ci.yml/badge.svg)](https://github.com/Jpatching/daybreak/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Solana](https://img.shields.io/badge/Solana-9945FF?style=flat&logo=solana&logoColor=white)
 
+<!-- Re-record demo with: daybreak migrate, status, list --discover -->
 ![Daybreak Demo](demo.gif)
 
-Daybreak analyzes any ERC-20 token on-chain — bytecode, capabilities, proxy patterns, bridge status — and tells you exactly how to migrate it to Solana using Native Token Transfers. It scores risk, recommends NTT modes, generates deployment configs, and deploys SPL tokens with metadata.
+Daybreak takes any ERC-20 token from analysis to deployed NTT bridge in a single command. It analyzes bytecode, capabilities, proxy patterns, and bridge status on-chain — then deploys the SPL token, writes the NTT config, and orchestrates the Wormhole CLI to complete the bridge. One command to migrate any EVM token to Solana via Sunrise.
 
 ## Why NTT?
 
@@ -19,11 +20,13 @@ Daybreak analyzes any ERC-20 token on-chain — bytecode, capabilities, proxy pa
 
 Moving an ERC-20 token to Solana means reading Wormhole docs, understanding NTT modes, checking decimal compatibility, analyzing bytecode for blockers, and manually writing deployment configs. **Daybreak does all of this in one command.**
 
+- **One-command migration** — `migrate` goes from EVM token to deployed NTT bridge end-to-end
+- **Live bridge detection** — Queries WormholeScan API to distinguish Portal (wrapped) vs NTT (native) vs Native tokens
 - **Instant analysis** — Risk score, compatibility verdict, and mode recommendation in seconds
 - **Zero guesswork** — Generates `deployment.json` and NTT CLI commands ready to run
-- **Discovery at scale** — `list` finds 50+ migration candidates you didn't know about
+- **Dynamic discovery** — `list --discover` finds migration candidates via CoinGecko API
+- **Post-migration monitoring** — `status` tracks bridge health, supply, and transfer activity
 - **Real deployment** — `deploy` creates SPL tokens on Solana with Metaplex metadata
-- **Readiness check** — `check` verifies your tools, wallet, and config before you start
 
 ## Prerequisites
 
@@ -37,8 +40,13 @@ Moving an ERC-20 token to Solana means reading Wormhole docs, understanding NTT 
 ```bash
 cargo install --path .
 
-# Discover migration-ready tokens
-daybreak list --limit 10
+# One-command migration (the killer feature)
+daybreak migrate 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum --network devnet
+
+# Or step by step:
+
+# Discover migration-ready tokens (with live API discovery)
+daybreak list --limit 10 --discover
 
 # Analyze ONDO (a strong migration candidate)
 daybreak scan 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum
@@ -46,37 +54,40 @@ daybreak scan 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum
 # Generate migration report + deployment config
 daybreak report 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum -o ./output
 
-# Compare migration paths (NTT vs Neon EVM vs native rewrite)
-daybreak compare 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum
-
 # Deploy SPL token on Solana devnet (with Metaplex metadata)
 daybreak deploy 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum --network devnet
 
-# Check migration readiness
-daybreak check 0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3 --chain ethereum
+# Monitor bridge health after deployment
+daybreak status <SOLANA_MINT_ADDRESS> --network devnet
 ```
 
 ## Full Migration Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. DISCOVER    daybreak list --limit 20                     │
-│    Find tokens not yet on Solana                            │
+│  FAST PATH (one command)                                    │
+│  daybreak migrate <ADDRESS> --chain ethereum --network devnet│
+│  Scan → Deploy SPL → Write config → NTT bridge → Done      │
+├─────────────────────────────────────────────────────────────┤
+│  OR STEP BY STEP:                                           │
+├─────────────────────────────────────────────────────────────┤
+│ 1. DISCOVER    daybreak list --discover                     │
+│    Find tokens not yet on Solana (live API + curated)       │
 ├─────────────────────────────────────────────────────────────┤
 │ 2. ANALYZE     daybreak scan <ADDRESS>                      │
-│    Risk score, NTT mode, compatibility verdict              │
+│    Risk score, NTT mode, bridge type (Portal vs NTT)        │
 ├─────────────────────────────────────────────────────────────┤
 │ 3. PLAN        daybreak report <ADDRESS> -o ./output        │
-│    Migration report + deployment.json + NTT CLI commands    │
+│    Report + deployment.json + liquidity plan                │
 ├─────────────────────────────────────────────────────────────┤
 │ 4. DEPLOY      daybreak deploy <ADDRESS> --network devnet   │
 │    SPL token on Solana with Metaplex metadata               │
 ├─────────────────────────────────────────────────────────────┤
-│ 5. CHECK       daybreak check <ADDRESS>                     │
-│    Verify tools, wallet, and config                         │
-├─────────────────────────────────────────────────────────────┤
-│ 6. BRIDGE      ntt init && ntt deploy                       │
+│ 5. BRIDGE      ntt init && ntt deploy                       │
 │    Run generated NTT CLI commands to complete the bridge    │
+├─────────────────────────────────────────────────────────────┤
+│ 6. MONITOR     daybreak status <SOLANA_MINT>                │
+│    Track bridge health, supply, and transfers               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -139,12 +150,14 @@ See [examples/](examples/) for sample migration reports:
 
 | Command | Description | Key Flags |
 |---------|-------------|-----------|
-| `list` | Discover migration-ready ERC-20 tokens (50+ curated) | `--chain`, `--limit`, `--json` |
-| `scan` | Full token analysis with risk scoring | `--chain`, `--skip-holders`, `--json` |
-| `report` | Generate migration report + NTT deployment config | `--chain`, `-o/--output`, `--skip-holders` |
+| `migrate` | **End-to-end NTT migration** (scan → deploy → bridge) | `--chain`, `--network`, `--keypair`, `--skip-ntt` |
+| `list` | Discover migration-ready ERC-20 tokens | `--chain`, `--limit`, `--json`, `--discover` |
+| `scan` | Full token analysis with risk scoring + live bridge detection | `--chain`, `--skip-holders`, `--json` |
+| `report` | Generate migration report + deployment config + liquidity plan | `--chain`, `-o/--output`, `--skip-holders` |
 | `compare` | Compare migration paths (NTT / Neon EVM / native) | `--chain`, `--json` |
 | `deploy` | Deploy SPL token on Solana with Metaplex metadata | `--chain`, `--network`, `--keypair` |
 | `check` | Pre-migration readiness checker | `--chain`, `--network`, `--keypair` |
+| `status` | Post-migration bridge health monitor | `--network` |
 
 **Global flags:** `--rpc-url` (custom RPC), `--etherscan-key` (holder data and volume-based rate limits)
 
@@ -153,17 +166,20 @@ See [examples/](examples/) for sample migration reports:
 ```
 src/
 ├── main.rs                # CLI entry point (clap)
-├── cli.rs                 # CLI argument definitions
+├── cli.rs                 # CLI argument definitions (8 commands)
 ├── commands/
+│   ├── migrate.rs         # End-to-end NTT orchestration (the killer feature)
 │   ├── scan.rs            # Full analysis with progress output
 │   ├── report.rs          # Markdown + deployment.json generation
 │   ├── compare.rs         # Migration path comparison
 │   ├── deploy.rs          # SPL token deployment + Metaplex metadata
 │   ├── check.rs           # Pre-migration readiness checker
-│   └── list.rs            # Token discovery (50+ curated tokens)
+│   ├── list.rs            # Token discovery (dynamic + curated)
+│   └── status.rs          # Post-migration bridge health monitor
 ├── analyzers/
 │   ├── evm/               # Raw JSON-RPC calls, bytecode analysis
-│   ├── bridges.rs         # Bridge detection (Jupiter, Wormhole)
+│   ├── bridges.rs         # Live bridge detection (WormholeScan API + curated)
+│   ├── discovery.rs       # Dynamic token discovery (CoinGecko API)
 │   ├── compatibility.rs   # NTT compatibility + mode recommendation
 │   ├── holders.rs         # Holder distribution via Etherscan
 │   └── volume.rs          # Transfer volume + rate limit calculator
@@ -175,7 +191,7 @@ src/
 │   ├── ntt_config.rs      # deployment.json + NTT CLI commands
 │   ├── migration_plan.rs  # Step-by-step migration plan
 │   └── comparison.rs      # Path comparison logic
-├── types/                 # Shared types (Token, Analysis, Risk, etc.)
+├── types/                 # Shared types (Token, Analysis, Risk, BridgeType, etc.)
 └── output/                # Terminal, Markdown, JSON formatters
 ```
 
@@ -183,10 +199,12 @@ src/
 
 1. **EVM RPC** — Fetches token metadata, bytecode, and capabilities via raw JSON-RPC calls (no ethers-rs)
 2. **Bytecode analysis** — Detects proxy patterns, selfdestruct, fee-on-transfer, rebasing selectors
-3. **Bridge detection** — Checks if the token already exists on Solana (Jupiter, native, Wormhole-wrapped)
+3. **Live bridge detection** — Queries WormholeScan API + curated list; distinguishes Portal (wrapped) vs NTT (native) vs Native
 4. **Risk scoring** — Scores 0-100 across decimals, features, complexity, holders, and bridge status
 5. **NTT config** — Recommends locking/burning mode, generates `deployment.json` with rate limits and transceiver config
 6. **SPL deployment** — Creates the token on Solana with correct decimals and Metaplex metadata
+7. **NTT orchestration** — Shells out to the `ntt` CLI to add chains, deploy contracts, and push configuration
+8. **Post-migration** — Monitors bridge health via Solana RPC and WormholeScan API
 
 ## Supported Chains
 

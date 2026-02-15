@@ -2,6 +2,24 @@
 
 All notable changes to Daybreak will be documented in this file.
 
+## [0.5.0] - 2026-02-15
+
+### Added
+- `migrate` command — end-to-end NTT orchestration: scan → deploy SPL → write deployment.json → shell out to NTT CLI → verify → print summary with explorer links
+- `status` command — post-migration bridge health monitor: queries Solana RPC for SPL token info and WormholeScan for recent bridge transfers
+- Live bridge detection — WormholeScan API integration replaces hardcoded bridge lookups; queries live Wormhole operations data
+- Bridge type distinction — Portal (wrapped) vs NTT (native via Sunrise) vs Native; the key Sunrise value prop
+- Dynamic token discovery — `--discover` flag on `list` command queries CoinGecko API for top ERC-20 tokens by market cap
+- Day-One Liquidity section in migration reports — Jupiter pool recommendations (DLMM vs CLMM), Sunrise liquidity checklist
+- `indicatif` progress spinners in `migrate` command for polished demo experience
+- `--skip-ntt` flag on `migrate` to deploy SPL token without requiring NTT CLI
+
+### Changed
+- Bridge detection now queries WormholeScan API for real-time Wormhole attestation data, with expanded curated fallback (8 Portal + 2 Native + 1 NTT tokens)
+- `list` command refactored to use `TokenDiscovery` module — curated list as fallback, CoinGecko as dynamic source
+- Scan output "Next Steps" now leads with `daybreak migrate` as the primary action
+- `BridgeStatus` type extended with `bridge_type: Option<BridgeType>` field
+
 ## [0.4.0] - 2026-02-15
 
 ### Added
