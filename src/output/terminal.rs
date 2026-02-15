@@ -1,7 +1,7 @@
-use colored::Colorize;
 use crate::types::{
     CompatibilityResult, Feasibility, FullAnalysis, IssueSeverity, MigrationPath, RiskRating,
 };
+use colored::Colorize;
 
 /// Handles colored terminal output
 pub struct TerminalOutput;
@@ -48,10 +48,7 @@ impl TerminalOutput {
         // Bridge status
         Self::print_section("Bridge Status");
         if analysis.bridge_status.already_on_solana {
-            println!(
-                "  {} Token already exists on Solana",
-                "!".yellow().bold()
-            );
+            println!("  {} Token already exists on Solana", "!".yellow().bold());
             if let Some(ref addr) = analysis.bridge_status.solana_address {
                 println!("  Solana Address: {}", addr.cyan());
             }
@@ -64,11 +61,17 @@ impl TerminalOutput {
 
         // Compatibility
         Self::print_section("NTT Compatibility");
-        Self::print_compatibility(&analysis.compatibility);
+        Self::print_compatibility(&analysis.compatibility, analysis.token.decimals);
 
         // Risk score
         Self::print_section("Risk Score");
         Self::print_risk_score(analysis);
+
+        // Verdict
+        Self::print_verdict(analysis);
+
+        // Next steps (only for compatible tokens)
+        Self::print_next_steps(analysis);
 
         println!();
     }
@@ -118,7 +121,7 @@ impl TerminalOutput {
         }
     }
 
-    fn print_compatibility(compat: &CompatibilityResult) {
+    fn print_compatibility(compat: &CompatibilityResult, evm_decimals: u8) {
         let status = if compat.is_compatible {
             "Compatible".green().bold()
         } else {
@@ -130,7 +133,7 @@ impl TerminalOutput {
         if compat.decimal_trimming_required {
             println!(
                 "  Decimals:   {} → {} {}",
-                18,
+                evm_decimals,
                 compat.solana_decimals,
                 "(trimming required)".yellow()
             );
@@ -189,6 +192,70 @@ impl TerminalOutput {
         );
     }
 
+    fn print_verdict(analysis: &FullAnalysis) {
+        println!();
+        println!("{}", "═".repeat(60).bright_blue());
+
+        if analysis.compatibility.is_compatible && analysis.risk_score.rating == RiskRating::Low {
+            println!(
+                "  {} {} ({}) is a strong candidate for NTT migration via Sunrise. Recommended mode: {}.",
+                "✅".green(),
+                analysis.token.symbol.bold(),
+                analysis.token.name,
+                analysis.compatibility.recommended_mode.to_string().green().bold(),
+            );
+        } else if analysis.compatibility.is_compatible {
+            println!(
+                "  {} {} ({}) is compatible with NTT migration (mode: {}), but has some risk factors to review.",
+                "⚠️".yellow(),
+                analysis.token.symbol.bold(),
+                analysis.token.name,
+                analysis.compatibility.recommended_mode.to_string().yellow().bold(),
+            );
+        } else {
+            println!(
+                "  {} {} ({}) has compatibility issues for NTT. Consider Neon EVM as an alternative.",
+                "❌".red(),
+                analysis.token.symbol.bold(),
+                analysis.token.name,
+            );
+        }
+
+        println!("{}", "═".repeat(60).bright_blue());
+    }
+
+    fn print_next_steps(analysis: &FullAnalysis) {
+        if !analysis.compatibility.is_compatible {
+            return;
+        }
+        println!();
+        Self::print_section("Next Steps");
+        println!(
+            "  1. Generate migration report:  {}",
+            format!(
+                "daybreak report {} --chain {} -o ./output",
+                analysis.token.address,
+                analysis.token.chain.to_string().to_lowercase()
+            )
+            .cyan()
+        );
+        println!(
+            "  2. Deploy SPL token on devnet: {}",
+            format!(
+                "daybreak deploy {} --chain {}",
+                analysis.token.address,
+                analysis.token.chain.to_string().to_lowercase()
+            )
+            .cyan()
+        );
+        println!(
+            "  3. Apply for Sunrise listing:  {}",
+            "https://www.sunrise.wtf".cyan()
+        );
+        println!();
+        println!("  {}", "Powered by Wormhole NTT via Sunrise".dimmed());
+    }
+
     fn print_path(path: &MigrationPath) {
         let feasibility_colored = match path.feasibility {
             Feasibility::Recommended => "Recommended".green().bold(),
@@ -201,7 +268,10 @@ impl TerminalOutput {
             path.method.to_string().bold(),
             feasibility_colored
         );
-        println!("  Cost: {}  |  Time: {}", path.estimated_cost_usd, path.estimated_time);
+        println!(
+            "  Cost: {}  |  Time: {}",
+            path.estimated_cost_usd, path.estimated_time
+        );
 
         if !path.pros.is_empty() {
             println!("  {}", "Pros:".green());
