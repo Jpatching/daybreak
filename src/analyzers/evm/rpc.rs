@@ -36,7 +36,7 @@ impl EvmRpcClient {
         }
     }
 
-    /// Make a raw JSON-RPC call
+    /// Make a raw JSON-RPC call with retry logic for rate-limited public RPCs
     async fn call(&self, method: &'static str, params: Value) -> Result<Value> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
@@ -45,24 +45,38 @@ impl EvmRpcClient {
             id: 1,
         };
 
-        let response = self
-            .client
-            .post(&self.url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send RPC request")?;
+        let mut last_err = None;
+        for attempt in 0..3 {
+            if attempt > 0 {
+                // Exponential backoff: 500ms, 1500ms
+                tokio::time::sleep(std::time::Duration::from_millis(500 * (1 << attempt))).await;
+            }
 
-        let rpc_response: JsonRpcResponse = response
-            .json()
-            .await
-            .context("Failed to parse RPC response")?;
+            let response = match self.client.post(&self.url).json(&request).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = Some(anyhow::anyhow!("Failed to send RPC request: {}", e));
+                    continue;
+                }
+            };
 
-        if let Some(error) = rpc_response.error {
-            anyhow::bail!("RPC error: {}", error.message);
+            let rpc_response: JsonRpcResponse = match response.json().await {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = Some(anyhow::anyhow!("Failed to parse RPC response: {}", e));
+                    continue;
+                }
+            };
+
+            if let Some(error) = rpc_response.error {
+                last_err = Some(anyhow::anyhow!("RPC error: {}", error.message));
+                continue;
+            }
+
+            return rpc_response.result.context("No result in RPC response");
         }
 
-        rpc_response.result.context("No result in RPC response")
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("RPC call failed after retries")))
     }
 
     /// Execute eth_call to read contract data
@@ -108,7 +122,9 @@ impl EvmRpcClient {
         const EIP1967_IMPL_SLOT: &str =
             "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 
-        let storage = self.get_storage_at(proxy_address, EIP1967_IMPL_SLOT).await?;
+        let storage = self
+            .get_storage_at(proxy_address, EIP1967_IMPL_SLOT)
+            .await?;
 
         // Storage returns 32 bytes, address is last 20 bytes
         // If all zeros, no implementation set
