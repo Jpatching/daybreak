@@ -312,7 +312,7 @@ export default function ScannerPage() {
       <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <a href="/" className="flex items-center">
-            <DaybreakLogo size={32} />
+            <DaybreakLogo size={44} />
           </a>
           <div className="hidden sm:flex items-center gap-4">
             <a href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm">

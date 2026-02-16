@@ -590,7 +590,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <DaybreakLogo size={32} />
+            <DaybreakLogo size={44} />
           </div>
           <div className="hidden md:flex items-center gap-5">
             <a href="/scan" className="text-slate-400 hover:text-white transition-colors text-sm">Scanner</a>
