@@ -23,20 +23,12 @@ import {
 
 function DaybreakLogo({ size = 28 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-      <defs>
-        <linearGradient id="db-s-grad" x1="16" y1="10" x2="16" y2="26" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#fbbf24" />
-          <stop offset="1" stopColor="#d97706" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="18" r="9" fill="url(#db-s-grad)" />
-      <rect y="18" width="32" height="14" fill="#0f172a" />
-      <line x1="16" y1="5" x2="16" y2="1" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="8" y1="9" x2="5" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="24" y1="9" x2="27" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="3" y1="18" x2="29" y2="18" stroke="#b45309" strokeWidth="1" />
-    </svg>
+    <img
+      src="/daybreak-logo.png"
+      alt="Daybreak"
+      style={{ width: size * 1.6, height: size }}
+      className="object-contain"
+    />
   );
 }
 
@@ -319,11 +311,8 @@ export default function ScannerPage() {
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2">
-            <DaybreakLogo size={28} />
-            <span className="text-xl font-bold" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f59e0b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Daybreak
-            </span>
+          <a href="/" className="flex items-center">
+            <DaybreakLogo size={32} />
           </a>
           <div className="hidden sm:flex items-center gap-4">
             <a href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm">
