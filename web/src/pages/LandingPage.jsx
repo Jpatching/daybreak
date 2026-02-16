@@ -29,6 +29,8 @@ import {
   Rocket,
   Server,
   Scale,
+  Menu,
+  X,
 } from 'lucide-react';
 import {
   SiEthereum,
@@ -38,7 +40,145 @@ import {
   SiCoinbase,
 } from '@icons-pack/react-simple-icons';
 
-// Gradient text style (cloned 1:1 from Clodds — but amber/orange for Sunrise)
+// ---------- Branding SVG components ----------
+
+function DaybreakLogo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <defs>
+        <linearGradient id="db-grad" x1="16" y1="10" x2="16" y2="26" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fbbf24" />
+          <stop offset="1" stopColor="#d97706" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="18" r="9" fill="url(#db-grad)" />
+      <rect y="18" width="32" height="14" fill="#0f172a" />
+      <line x1="16" y1="5" x2="16" y2="1" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="8" y1="9" x2="5" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="24" y1="9" x2="27" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="3" y1="18" x2="29" y2="18" stroke="#b45309" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function WormholeIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40">
+      <rect width="40" height="40" rx="20" fill="#0d1117" />
+      <circle cx="20" cy="20" r="14" fill="none" stroke="white" strokeWidth="1.5" opacity="0.25" />
+      <circle cx="20" cy="20" r="10" fill="none" stroke="white" strokeWidth="1.5" opacity="0.45" />
+      <circle cx="20" cy="20" r="6" fill="none" stroke="white" strokeWidth="1.5" opacity="0.7" />
+      <circle cx="20" cy="20" r="2.5" fill="white" />
+    </svg>
+  );
+}
+
+function SunriseIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40">
+      <rect width="40" height="40" rx="20" fill="#1a0800" />
+      <defs>
+        <linearGradient id="sun-g" x1="20" y1="14" x2="20" y2="30" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fbbf24" />
+          <stop offset="1" stopColor="#d97706" />
+        </linearGradient>
+      </defs>
+      <circle cx="20" cy="24" r="8" fill="url(#sun-g)" />
+      <rect x="0" y="24" width="40" height="16" fill="#1a0800" />
+      <line x1="20" y1="10" x2="20" y2="5" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="14" x2="9" y2="10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
+      <line x1="28" y1="14" x2="31" y2="10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
+      <line x1="6" y1="24" x2="34" y2="24" stroke="#92400e" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function ArbitrumIcon({ size = 28, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
+      <rect width="40" height="40" rx="20" fill="#213147" />
+      <path d="M20.7 11L27.5 22.5L24.2 24.5L20.7 17.5L17.2 24.5L13.9 22.5L20.7 11Z" fill="#12AAFF" />
+      <path d="M20.7 17.5L24.2 24.5L20.7 30L17.2 24.5L20.7 17.5Z" fill="white" />
+    </svg>
+  );
+}
+
+function AvalancheIcon({ size = 28, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
+      <rect width="40" height="40" rx="20" fill="#E84142" />
+      <path d="M20 10L30 28H10L20 10Z" fill="white" />
+      <path d="M20 17L25 27H15L20 17Z" fill="#E84142" />
+    </svg>
+  );
+}
+
+function BnbIcon({ size = 28, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
+      <rect width="40" height="40" rx="20" fill="#F3BA2F" />
+      <path d="M20 8L24 12L21.5 14.5L20 13L18.5 14.5L16 12L20 8Z" fill="white" />
+      <path d="M27 15L31 19L27 23L23 19L27 15Z" fill="white" transform="scale(0.55) translate(17,13)" />
+      <path d="M13 15L17 19L13 23L9 19L13 15Z" fill="white" transform="scale(0.55) translate(17,13)" />
+      <path d="M20 18L24 22L20 26L16 22L20 18Z" fill="white" />
+      <path d="M20 32L16 28L18.5 25.5L20 27L21.5 25.5L24 28L20 32Z" fill="white" />
+    </svg>
+  );
+}
+
+// ---------- Token logos ----------
+
+const TOKEN_LOGOS = {
+  ONDO: 'https://tokens.1inch.io/0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3.png',
+  UNI: 'https://tokens.1inch.io/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984.png',
+  LINK: 'https://tokens.1inch.io/0x514910771af9ca656af840dff83e8264ecf986ca.png',
+  ARB: 'https://tokens.1inch.io/0xb50721bcf8d664c30412cfbc6cf7a15145234ad1.png',
+  AAVE: 'https://tokens.1inch.io/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.png',
+  MKR: 'https://tokens.1inch.io/0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2.png',
+  PEPE: 'https://tokens.1inch.io/0x6982508145454ce325ddbe47a25d4ec3d2311933.png',
+  stETH: 'https://tokens.1inch.io/0xae7ab96520de3a18e5e111b5eaab095312d7fe84.png',
+};
+
+const TOKEN_COLORS = {
+  ONDO: '#162c5e',
+  UNI: '#ff007a',
+  LINK: '#2a5ada',
+  ARB: '#28a0f0',
+  AAVE: '#b6509e',
+  MKR: '#1aab9b',
+  PEPE: '#3cbe00',
+  stETH: '#00a3ff',
+};
+
+function TokenLogo({ symbol, size = 36 }) {
+  const [failed, setFailed] = useState(false);
+  const url = TOKEN_LOGOS[symbol];
+  const bg = TOKEN_COLORS[symbol] || '#334155';
+
+  if (!url || failed) {
+    return (
+      <div
+        className="rounded-full flex items-center justify-center font-bold text-white"
+        style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: bg }}
+      >
+        {symbol?.[0]}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={url}
+      alt={symbol}
+      className="rounded-full object-cover"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// ---------- Gradient text styles ----------
+
 const gradientTextStyle = {
   background: 'linear-gradient(180deg, #ffffff 0%, #f59e0b 50%, #d97706 100%)',
   WebkitBackgroundClip: 'text',
@@ -53,62 +193,20 @@ const gradientTextStyleHero = {
   filter: 'drop-shadow(0 0 20px rgba(245, 158, 11, 0.5))',
 };
 
+// ---------- Data ----------
+
 const features = [
-  {
-    color: 'amber',
-    title: 'Risk Scoring (0-100)',
-    description: 'Composite score across 5 dimensions: decimals, token features, bytecode complexity, holder concentration, bridge status.',
-  },
-  {
-    color: 'green',
-    title: 'NTT Mode Analysis',
-    description: 'Auto-recommends Locking vs Burning mode. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.',
-  },
-  {
-    color: 'purple',
-    title: 'Bytecode Inspection',
-    description: 'Static analysis of EVM bytecode. Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.',
-  },
-  {
-    color: 'blue',
-    title: 'Bridge Detection',
-    description: 'Live WormholeScan API queries. Distinguishes Portal (wrapped), NTT (native), and natively-issued tokens.',
-  },
-  {
-    color: 'orange',
-    title: 'SPL Deployment',
-    description: 'Deploy SPL token on Solana with Metaplex metadata. Handles decimal trimming (18→8), mint authority transfer.',
-  },
-  {
-    color: 'red',
-    title: 'End-to-End Migration',
-    description: 'Scan → Deploy SPL → Write NTT config → Orchestrate NTT CLI → Verify. Full pipeline in one command.',
-  },
-  {
-    color: 'emerald',
-    title: 'Multi-Chain Support',
-    description: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche. Auto-detects chain-specific explorers.',
-  },
-  {
-    color: 'cyan',
-    title: 'Rate Limit Intelligence',
-    description: 'Calculates NTT rate limits from 24h transfer volume and supply. Conservative defaults with per-tx caps.',
-  },
-  {
-    color: 'pink',
-    title: 'Holder Concentration',
-    description: 'Etherscan top-10 holder analysis. Whale concentration scoring, governance token detection.',
-  },
-  {
-    color: 'yellow',
-    title: 'Report Generation',
-    description: 'Markdown + deployment.json + ntt-commands.sh. Ready-to-run migration scripts with cost estimates.',
-  },
-  {
-    color: 'purple',
-    title: 'Token Discovery',
-    description: 'Dynamic CoinGecko API integration. Find migration-ready tokens by market cap. Curated fallback for 55+ tokens.',
-  },
+  { color: 'amber', title: 'Risk Scoring (0-100)', description: 'Composite score across 5 dimensions: decimals, token features, bytecode complexity, holder concentration, bridge status.' },
+  { color: 'green', title: 'NTT Mode Analysis', description: 'Auto-recommends Locking vs Burning mode. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.' },
+  { color: 'purple', title: 'Bytecode Inspection', description: 'Static analysis of EVM bytecode. Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.' },
+  { color: 'blue', title: 'Bridge Detection', description: 'Live WormholeScan API queries. Distinguishes Portal (wrapped), NTT (native), and natively-issued tokens.' },
+  { color: 'orange', title: 'SPL Deployment', description: 'Deploy SPL token on Solana with Metaplex metadata. Handles decimal trimming (18\u21928), mint authority transfer.' },
+  { color: 'red', title: 'End-to-End Migration', description: 'Scan \u2192 Deploy SPL \u2192 Write NTT config \u2192 Orchestrate NTT CLI \u2192 Verify. Full pipeline in one command.' },
+  { color: 'emerald', title: 'Multi-Chain Support', description: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche. Auto-detects chain-specific explorers.' },
+  { color: 'cyan', title: 'Rate Limit Intelligence', description: 'Calculates NTT rate limits from 24h transfer volume and supply. Conservative defaults with per-tx caps.' },
+  { color: 'pink', title: 'Holder Concentration', description: 'Etherscan top-10 holder analysis. Whale concentration scoring, governance token detection.' },
+  { color: 'yellow', title: 'Report Generation', description: 'Markdown + deployment.json + ntt-commands.sh. Ready-to-run migration scripts with cost estimates.' },
+  { color: 'purple', title: 'Token Discovery', description: 'Dynamic CoinGecko API integration. Find migration-ready tokens by market cap. Curated fallback for 55+ tokens.' },
 ];
 
 const stats = [
@@ -146,7 +244,7 @@ const advancedFeatures = [
   { icon: Search, title: 'Bytecode Analysis', desc: 'Proxy detection, selfdestruct, delegatecall, complexity rating', color: 'purple' },
   { icon: Eye, title: 'Bridge Detection', desc: 'WormholeScan API, Portal/NTT/Native token classification', color: 'blue' },
   { icon: Layers, title: 'SPL Deployment', desc: 'Mint creation, Metaplex metadata, authority transfer', color: 'orange' },
-  { icon: Rocket, title: 'Migration Pipeline', desc: 'Scan → Deploy → Config → NTT CLI → Verify in one command', color: 'red' },
+  { icon: Rocket, title: 'Migration Pipeline', desc: 'Scan \u2192 Deploy \u2192 Config \u2192 NTT CLI \u2192 Verify in one command', color: 'red' },
   { icon: BarChart2, title: 'Rate Limits', desc: 'Volume-based NTT rate limit calculation with supply floors', color: 'cyan' },
   { icon: Activity, title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection', color: 'yellow' },
   { icon: FileText, title: 'Report Generation', desc: 'Markdown, JSON, deployment.json, ntt-commands.sh', color: 'pink' },
@@ -158,6 +256,8 @@ const advancedFeatures = [
   { icon: Lock, title: 'Proxy Analysis', desc: 'EIP-1167 minimal proxy, EIP-1967 transparent proxy, storage slot lookup', color: 'purple' },
   { icon: Database, title: 'Post-Migration', desc: 'SPL token info, WormholeScan transfers, bridge health monitoring', color: 'cyan' },
 ];
+
+// ---------- Sections ----------
 
 function UserTypeSection() {
   const [userType, setUserType] = useState(null);
@@ -186,7 +286,7 @@ function UserTypeSection() {
               onClick={() => setUserType(null)}
               className="text-slate-400 hover:text-slate-300 text-xs mb-4 transition-colors"
             >
-              ← Back
+              &larr; Back
             </button>
 
             {userType === 'developer' ? (
@@ -203,7 +303,7 @@ function UserTypeSection() {
                 <code className="block bg-slate-900 p-2 rounded text-amber-300 text-xs overflow-x-auto mb-3">
                   daybreak migrate 0xYOUR_TOKEN --keypair ~/wallet.json
                 </code>
-                <p className="text-slate-400 text-xs">End-to-end: scan → deploy SPL → configure NTT → bridge via Sunrise. Full report at <a href="/scan" className="text-amber-400 hover:underline">/scan</a>.</p>
+                <p className="text-slate-400 text-xs">End-to-end: scan &rarr; deploy SPL &rarr; configure NTT &rarr; bridge via Sunrise. Full report at <a href="/scan" className="text-amber-400 hover:underline">/scan</a>.</p>
               </div>
             )}
           </div>
@@ -217,14 +317,14 @@ function MarketsSection() {
   const [marketSlide, setMarketSlide] = useState(0);
 
   const riskExamples = [
-    { name: 'ONDO', icon: CheckCircle2, status: 'Low Risk (36)', detail: 'Locking mode' },
-    { name: 'UNI', icon: CheckCircle2, status: 'Low Risk (28)', detail: 'Locking mode' },
-    { name: 'LINK', icon: CheckCircle2, status: 'Low Risk (31)', detail: 'Locking mode' },
-    { name: 'ARB', icon: CheckCircle2, status: 'Low Risk (25)', detail: 'Locking mode' },
-    { name: 'AAVE', icon: AlertTriangle, status: 'Medium (42)', detail: 'Proxy detected' },
-    { name: 'MKR', icon: AlertTriangle, status: 'Medium (44)', detail: 'Burning mode' },
-    { name: 'PEPE', icon: AlertTriangle, status: 'Medium (55)', detail: 'High concentration' },
-    { name: 'stETH', icon: XCircle, status: 'High Risk (89)', detail: 'Rebasing!' },
+    { name: 'ONDO', statusIcon: CheckCircle2, status: 'Low Risk (36)', detail: 'Locking mode' },
+    { name: 'UNI', statusIcon: CheckCircle2, status: 'Low Risk (28)', detail: 'Locking mode' },
+    { name: 'LINK', statusIcon: CheckCircle2, status: 'Low Risk (31)', detail: 'Locking mode' },
+    { name: 'ARB', statusIcon: CheckCircle2, status: 'Low Risk (25)', detail: 'Locking mode' },
+    { name: 'AAVE', statusIcon: AlertTriangle, status: 'Medium (42)', detail: 'Proxy detected' },
+    { name: 'MKR', statusIcon: AlertTriangle, status: 'Medium (44)', detail: 'Burning mode' },
+    { name: 'PEPE', statusIcon: AlertTriangle, status: 'Medium (55)', detail: 'High concentration' },
+    { name: 'stETH', statusIcon: XCircle, status: 'High Risk (89)', detail: 'Rebasing!' },
   ];
 
   const capabilities = [
@@ -241,15 +341,15 @@ function MarketsSection() {
   const chains = [
     { name: 'Ethereum', icon: SiEthereum, status: 'Supported' },
     { name: 'Polygon', icon: SiPolygon, status: 'Supported' },
-    { name: 'Arbitrum', icon: Activity, status: 'Supported' },
-    { name: 'BSC', icon: Globe, status: 'Supported' },
+    { name: 'Arbitrum', icon: ArbitrumIcon, status: 'Supported', isCustom: true },
+    { name: 'BSC', icon: BnbIcon, status: 'Supported', isCustom: true },
     { name: 'Base', icon: SiCoinbase, status: 'Supported' },
     { name: 'Optimism', icon: SiOptimism, status: 'Supported' },
-    { name: 'Avalanche', icon: Layers, status: 'Supported' },
+    { name: 'Avalanche', icon: AvalancheIcon, status: 'Supported', isCustom: true },
   ];
 
   const slides = [
-    { title: 'Risk Scoring', subtitle: 'Analyze any ERC-20 token for migration readiness', markets: riskExamples },
+    { title: 'Risk Scoring', subtitle: 'Analyze any ERC-20 token for migration readiness', markets: riskExamples, isTokenSlide: true },
     { title: 'Capability Detection', subtitle: 'Deep bytecode inspection for NTT compatibility', markets: capabilities },
     { title: 'Supported Chains', subtitle: 'Scan tokens on any major EVM chain', markets: chains },
   ];
@@ -289,14 +389,39 @@ function MarketsSection() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {currentSlide.markets.map((market) => {
               const Icon = market.icon;
+              const StatusIcon = market.statusIcon;
               return (
                 <div
                   key={market.name}
                   className="flex flex-col items-center gap-2 p-5 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
                 >
-                  <Icon size={36} className="text-amber-400" />
+                  {currentSlide.isTokenSlide ? (
+                    <div className="relative">
+                      <TokenLogo symbol={market.name} size={40} />
+                      <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-slate-800">
+                        <StatusIcon
+                          size={14}
+                          className={
+                            market.status.includes('Low') ? 'text-green-400'
+                              : market.status.includes('High') ? 'text-red-400'
+                              : 'text-yellow-400'
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : market.isCustom ? (
+                    <Icon size={36} />
+                  ) : (
+                    <Icon size={36} className="text-amber-400" />
+                  )}
                   <span className="text-white font-medium">{market.name}</span>
-                  <span className={`text-xs ${market.status.includes('Low') || market.status === 'Supported' || market.status === 'Detected' || market.status === 'Info' ? 'text-green-400' : market.status.includes('High') || market.status === 'Blocker' ? 'text-red-400' : 'text-yellow-400'}`}>
+                  <span className={`text-xs ${
+                    market.status.includes('Low') || market.status === 'Supported' || market.status === 'Detected' || market.status === 'Info'
+                      ? 'text-green-400'
+                      : market.status.includes('High') || market.status === 'Blocker'
+                      ? 'text-red-400'
+                      : 'text-yellow-400'
+                  }`}>
                     {market.status}
                   </span>
                   {market.detail && (
@@ -430,10 +555,11 @@ function AdvancedFeaturesSection() {
             {[
               { name: 'Ethereum', icon: SiEthereum },
               { name: 'Polygon', icon: SiPolygon },
-              { name: 'Arbitrum', icon: Activity },
-              { name: 'BSC', icon: Globe },
+              { name: 'Arbitrum', icon: ArbitrumIcon, isCustom: true },
+              { name: 'BSC', icon: BnbIcon, isCustom: true },
               { name: 'Base', icon: SiCoinbase },
               { name: 'Optimism', icon: SiOptimism },
+              { name: 'Avalanche', icon: AvalancheIcon, isCustom: true },
               { name: 'Solana', icon: SiSolana },
             ].map((chain) => {
               const Icon = chain.icon;
@@ -442,7 +568,7 @@ function AdvancedFeaturesSection() {
                   key={chain.name}
                   className="flex flex-col items-center gap-2 p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
                 >
-                  <Icon size={28} className="text-amber-400" />
+                  {chain.isCustom ? <Icon size={28} /> : <Icon size={28} className="text-amber-400" />}
                   <span className="text-slate-300 text-sm">{chain.name}</span>
                 </div>
               );
@@ -454,9 +580,12 @@ function AdvancedFeaturesSection() {
   );
 }
 
+// ---------- Main Page ----------
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [address, setAddress] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleScan = (e) => {
     e.preventDefault();
@@ -469,7 +598,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🌅</span>
+            <DaybreakLogo size={28} />
             <span
               className="text-xl font-bold"
               style={{
@@ -481,7 +610,7 @@ export default function LandingPage() {
               Daybreak
             </span>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-6">
             <a href="/scan" className="text-slate-300 hover:text-white transition-colors">Scanner</a>
             <a
               href="https://github.com/Jpatching/daybreak"
@@ -506,7 +635,53 @@ export default function LandingPage() {
               Scan Token
             </a>
           </div>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden text-slate-300 hover:text-white transition-colors"
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
+            <div className="px-6 py-4 flex flex-col gap-3">
+              <a
+                href="/scan"
+                className="text-slate-300 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Scanner
+              </a>
+              <a
+                href="https://github.com/Jpatching/daybreak"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-300 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                GitHub
+              </a>
+              <a
+                href="https://github.com/Jpatching/daybreak/issues/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-400 hover:text-amber-300 transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Report Bug
+              </a>
+              <a
+                href="/scan"
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-medium rounded-lg transition-colors text-center"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Scan Token
+              </a>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero */}
@@ -521,7 +696,8 @@ export default function LandingPage() {
                 Scan Any ERC-20<br />for Solana Migration
               </h1>
               <p className="text-xl text-slate-300 mb-8" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.3)' }}>
-                Risk scoring. NTT analysis. Powered by Sunrise.
+                Risk scoring. NTT analysis. Powered by{' '}
+                <span className="text-amber-400 font-semibold">Wormhole Sunrise</span>.
               </p>
 
               {/* Scanner input in hero */}
@@ -574,24 +750,56 @@ export default function LandingPage() {
                   <div className="w-16"></div>
                 </div>
                 <div className="bg-slate-900 p-4 font-mono text-xs text-slate-300 space-y-1">
-                  <div className="text-slate-600">{"═".repeat(48)}</div>
+                  <div className="text-slate-600">{"\u2550".repeat(48)}</div>
                   <div className="text-white font-semibold">  Ondo Finance (ONDO) on Ethereum</div>
-                  <div className="text-slate-600">{"═".repeat(48)}</div>
-                  <div className="mt-2 text-slate-500">── Token Information ──</div>
+                  <div className="text-slate-600">{"\u2550".repeat(48)}</div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Token Information &mdash;&mdash;</div>
                   <div>  Decimals:     <span className="text-white">18</span></div>
                   <div>  Total Supply: <span className="text-white">10,000,000,000</span></div>
-                  <div className="mt-2 text-slate-500">── Capabilities ──</div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Capabilities &mdash;&mdash;</div>
                   <div>  Mintable     <span className="text-green-400">Yes</span></div>
                   <div>  Burnable     <span className="text-slate-500">No</span></div>
                   <div>  Pausable     <span className="text-slate-500">No</span></div>
-                  <div className="mt-2 text-slate-500">── NTT Compatibility ──</div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; NTT Compatibility &mdash;&mdash;</div>
                   <div>  Status:      <span className="text-green-400">Compatible</span></div>
                   <div>  Mode:        <span className="text-amber-400">Locking</span></div>
-                  <div>  Decimals:    <span className="text-white">18 → 8</span> <span className="text-yellow-400">(trimming)</span></div>
-                  <div className="mt-2 text-slate-500">── Risk Score ──</div>
+                  <div>  Decimals:    <span className="text-white">18 &rarr; 8</span> <span className="text-yellow-400">(trimming)</span></div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Risk Score &mdash;&mdash;</div>
                   <div>  Score:       <span className="text-green-400">36/100 (Low)</span></div>
-                  <div className="mt-2 text-green-400">✓ Strong candidate for NTT migration via Sunrise</div>
+                  <div className="mt-2 text-green-400">&check; Strong candidate for NTT migration via Sunrise</div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Ecosystem / Branding */}
+      <section className="py-10 px-6 border-y border-slate-700/30">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Built for the Sunrise Ecosystem</p>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-8 sm:gap-12">
+            <div className="flex items-center gap-3">
+              <WormholeIcon size={36} />
+              <div>
+                <div className="text-white font-semibold text-sm">Wormhole</div>
+                <div className="text-slate-500 text-xs">NTT Protocol</div>
+              </div>
+            </div>
+            <div className="hidden sm:block w-px h-10 bg-slate-700" />
+            <div className="flex items-center gap-3">
+              <SunriseIcon size={36} />
+              <div>
+                <div className="text-white font-semibold text-sm">Sunrise</div>
+                <div className="text-slate-500 text-xs">Liquidity Gateway</div>
+              </div>
+            </div>
+            <div className="hidden sm:block w-px h-10 bg-slate-700" />
+            <div className="flex items-center gap-3">
+              <SiSolana size={36} className="text-[#9945FF]" />
+              <div>
+                <div className="text-white font-semibold text-sm">Solana</div>
+                <div className="text-slate-500 text-xs">Target Chain</div>
               </div>
             </div>
           </div>
@@ -653,7 +861,7 @@ export default function LandingPage() {
               <code className="text-xs text-slate-300 font-mono whitespace-pre">{codeExample}</code>
             </pre>
             <div className="px-6 py-3 bg-slate-800/50 border-t border-slate-700 text-xs text-slate-400">
-              7 chains • 8 commands • risk scoring • NTT analysis • SPL deployment
+              7 chains &bull; 8 commands &bull; risk scoring &bull; NTT analysis &bull; SPL deployment
             </div>
           </div>
         </div>
@@ -740,7 +948,7 @@ export default function LandingPage() {
             {[
               {
                 q: 'What is Wormhole NTT?',
-                a: 'Native Token Transfers (NTT) is Wormhole\'s framework for bringing tokens to new chains natively — not as wrapped assets. Tokens retain full utility and fungibility.',
+                a: 'Native Token Transfers (NTT) is Wormhole\'s framework for bringing tokens to new chains natively \u2014 not as wrapped assets. Tokens retain full utility and fungibility.',
               },
               {
                 q: 'What\'s the difference between Locking and Burning mode?',
@@ -753,6 +961,10 @@ export default function LandingPage() {
               {
                 q: 'Can rebasing tokens migrate?',
                 a: 'Not directly. Rebasing tokens (like stETH) change balances automatically, which desyncs locked amounts from minted supply. Use a non-rebasing wrapper (like wstETH) instead.',
+              },
+              {
+                q: 'What is Sunrise?',
+                a: 'Sunrise is Wormhole\'s day-one liquidity gateway for Solana. It provides immediate liquidity for bridged assets so tokens aren\'t stranded on arrival.',
               },
               {
                 q: 'Is Daybreak open source?',
@@ -807,15 +1019,21 @@ export default function LandingPage() {
       <footer className="py-8 px-6 border-t border-slate-700">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🌅</span>
+            <DaybreakLogo size={22} />
             <span className="text-white font-semibold">Daybreak</span>
-            <span className="text-slate-500 text-sm">ERC-20 → Solana</span>
+            <span className="text-slate-500 text-sm">ERC-20 &rarr; Solana</span>
           </div>
-          <div className="flex items-center gap-6 text-slate-400 text-sm">
+          <div className="flex items-center gap-6 text-slate-400 text-sm flex-wrap justify-center">
             <a href="/scan" className="hover:text-white transition-colors">Scanner</a>
             <a href="https://github.com/Jpatching/daybreak" className="hover:text-white transition-colors">GitHub</a>
-            <a href="https://wormhole.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Wormhole</a>
-            <a href="https://solana.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Solana</a>
+            <a href="https://wormhole.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+              <WormholeIcon size={14} />
+              Wormhole
+            </a>
+            <a href="https://solana.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+              <SiSolana size={14} />
+              Solana
+            </a>
             <span>MIT License</span>
           </div>
         </div>

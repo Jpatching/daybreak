@@ -15,7 +15,73 @@ import {
   Lock,
   Loader2,
   Download,
+  Menu,
+  X,
 } from 'lucide-react';
+
+// ---------- Branding ----------
+
+function DaybreakLogo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <defs>
+        <linearGradient id="db-s-grad" x1="16" y1="10" x2="16" y2="26" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fbbf24" />
+          <stop offset="1" stopColor="#d97706" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="18" r="9" fill="url(#db-s-grad)" />
+      <rect y="18" width="32" height="14" fill="#0f172a" />
+      <line x1="16" y1="5" x2="16" y2="1" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="8" y1="9" x2="5" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="24" y1="9" x2="27" y2="6" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="3" y1="18" x2="29" y2="18" stroke="#b45309" strokeWidth="1" />
+    </svg>
+  );
+}
+
+// ---------- Token logos ----------
+
+const TOKEN_LOGOS = {
+  ONDO: 'https://tokens.1inch.io/0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3.png',
+  AAVE: 'https://tokens.1inch.io/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.png',
+  stETH: 'https://tokens.1inch.io/0xae7ab96520de3a18e5e111b5eaab095312d7fe84.png',
+};
+
+const TOKEN_COLORS = {
+  ONDO: '#162c5e',
+  AAVE: '#b6509e',
+  stETH: '#00a3ff',
+};
+
+function TokenLogo({ symbol, size = 36 }) {
+  const [failed, setFailed] = useState(false);
+  const url = TOKEN_LOGOS[symbol];
+  const bg = TOKEN_COLORS[symbol] || '#334155';
+
+  if (!url || failed) {
+    return (
+      <div
+        className="rounded-full flex items-center justify-center font-bold text-white"
+        style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: bg }}
+      >
+        {symbol?.[0]}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={url}
+      alt={symbol}
+      className="rounded-full object-cover"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// ---------- Gradient ----------
 
 const gradientTextStyle = {
   background: 'linear-gradient(180deg, #ffffff 0%, #f59e0b 50%, #d97706 100%)',
@@ -23,6 +89,8 @@ const gradientTextStyle = {
   WebkitTextFillColor: 'transparent',
   filter: 'drop-shadow(0 0 15px rgba(245, 158, 11, 0.4))',
 };
+
+// ---------- Mock data ----------
 
 const MOCK_RESULTS = {
   '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3': {
@@ -48,7 +116,7 @@ const MOCK_RESULTS = {
       { dim: 'Bridge Status', score: 0, max: 20 },
     ],
     issues: [
-      { severity: 'WARNING', msg: 'Decimal trimming: 18 → 8. Max dust per tx: < 0.00000001 tokens.' },
+      { severity: 'WARNING', msg: 'Decimal trimming: 18 \u2192 8. Max dust per tx: < 0.00000001 tokens.' },
       { severity: 'INFO', msg: 'Mintable token. Locking mode recommended (mint authority stays on source chain).' },
     ],
     verdict: 'ONDO is a strong candidate for NTT migration via Sunrise. Recommended mode: Locking.',
@@ -76,7 +144,7 @@ const MOCK_RESULTS = {
       { dim: 'Bridge Status', score: 5, max: 20 },
     ],
     issues: [
-      { severity: 'WARNING', msg: 'Decimal trimming required: 18 → 8 decimals.' },
+      { severity: 'WARNING', msg: 'Decimal trimming required: 18 \u2192 8 decimals.' },
       { severity: 'WARNING', msg: 'Proxy contract detected. Monitor for implementation upgrades.' },
       { severity: 'INFO', msg: 'Wormhole Portal attestation exists. Consider NTT upgrade.' },
     ],
@@ -107,7 +175,7 @@ const MOCK_RESULTS = {
     issues: [
       { severity: 'ERROR', msg: 'Rebasing token detected. Locked tokens will desync from minted supply. NTT incompatible.' },
       { severity: 'ERROR', msg: 'Use wstETH (wrapped, non-rebasing) instead.' },
-      { severity: 'WARNING', msg: 'Pausable contract — bridge operations could be frozen.' },
+      { severity: 'WARNING', msg: 'Pausable contract \u2014 bridge operations could be frozen.' },
       { severity: 'WARNING', msg: 'High holder concentration: top 10 hold ~72%.' },
     ],
     verdict: 'stETH is NOT compatible with NTT migration due to rebasing. Use wstETH instead.',
@@ -152,6 +220,74 @@ function RiskGauge({ score }) {
   );
 }
 
+// ---------- Download report ----------
+
+function generateReport(result) {
+  const lines = [
+    `# Daybreak Migration Report`,
+    ``,
+    `## ${result.name} (${result.symbol})`,
+    ``,
+    `| Field | Value |`,
+    `|-------|-------|`,
+    `| Chain | ${result.chain} |`,
+    `| Address | \`${result.address}\` |`,
+    `| Decimals | ${result.decimals} |`,
+    `| Total Supply | ${result.totalSupply} |`,
+    `| Risk Score | ${result.riskScore}/100 (${result.riskRating}) |`,
+    `| NTT Compatible | ${result.nttCompatible ? 'Yes' : 'No'} |`,
+    `| NTT Mode | ${result.nttMode} |`,
+    ``,
+    `## Risk Breakdown`,
+    ``,
+    `| Dimension | Score | Max |`,
+    `|-----------|-------|-----|`,
+    ...result.riskBreakdown.map(d => `| ${d.dim} | ${d.score} | ${d.max} |`),
+    ``,
+    `## Capabilities`,
+    ``,
+    `| Capability | Detected | Severity |`,
+    `|-----------|----------|----------|`,
+    ...result.capabilities.map(c => `| ${c.name} | ${c.detected ? 'Yes' : 'No'} | ${c.severity} |`),
+    ``,
+    `## Bytecode Analysis`,
+    ``,
+    `- **Size:** ${result.bytecode.sizeKb} KB`,
+    `- **Complexity:** ${result.bytecode.complexity}`,
+    `- **Proxy:** ${result.bytecode.isProxy ? 'Yes' : 'No'}`,
+    `- **Selfdestruct:** ${result.bytecode.hasSelfDestruct ? 'Yes' : 'No'}`,
+    `- **Delegatecall:** ${result.bytecode.hasDelegateCall ? 'Yes' : 'No'}`,
+    ``,
+    `## Issues & Recommendations`,
+    ``,
+    ...result.issues.map(i => `- **[${i.severity}]** ${i.msg}`),
+    ``,
+    `## Verdict`,
+    ``,
+    result.verdict,
+    ``,
+    `---`,
+    ``,
+    `*Generated by [Daybreak](https://github.com/Jpatching/daybreak) | Built for Wormhole Sunrise*`,
+  ];
+  return lines.join('\n');
+}
+
+function downloadReport(result) {
+  const md = generateReport(result);
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `daybreak-${result.symbol.toLowerCase()}-report.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Main ----------
+
 export default function ScannerPage() {
   const { address: urlAddress } = useParams();
   const navigate = useNavigate();
@@ -159,6 +295,7 @@ export default function ScannerPage() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
   const [chain, setChain] = useState('Ethereum');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const chains = ['Ethereum', 'Polygon', 'Arbitrum', 'BSC', 'Base', 'Optimism', 'Avalanche'];
 
   useEffect(() => {
@@ -183,16 +320,50 @@ export default function ScannerPage() {
       <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <span className="text-2xl">🌅</span>
+            <DaybreakLogo size={28} />
             <span className="text-xl font-bold" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f59e0b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Daybreak
             </span>
           </a>
-          <a href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm">
-            <ArrowLeft size={16} />
-            Home
-          </a>
+          <div className="hidden sm:flex items-center gap-4">
+            <a href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm">
+              <ArrowLeft size={16} />
+              Home
+            </a>
+            <a
+              href="https://github.com/Jpatching/daybreak"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-400 hover:text-white transition-colors text-sm"
+            >
+              GitHub
+            </a>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="sm:hidden text-slate-300 hover:text-white transition-colors"
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
+        {mobileMenuOpen && (
+          <div className="sm:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
+            <div className="px-6 py-4 flex flex-col gap-3">
+              <a href="/" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
+                Home
+              </a>
+              <a
+                href="https://github.com/Jpatching/daybreak"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-300 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                GitHub
+              </a>
+            </div>
+          </div>
+        )}
       </nav>
 
       <div className="pt-24 pb-16 px-6">
@@ -254,10 +425,13 @@ export default function ScannerPage() {
                   <button
                     key={t.sym}
                     onClick={() => { setQuery(t.sym); navigate(`/scan/${t.sym}`); }}
-                    className="px-5 py-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors text-left"
+                    className="px-5 py-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors text-left flex items-center gap-3"
                   >
-                    <div className="font-semibold text-white">{t.sym}</div>
-                    <div className={`text-xs ${t.cls}`}>{t.label}</div>
+                    <TokenLogo symbol={t.sym} size={32} />
+                    <div>
+                      <div className="font-semibold text-white">{t.sym}</div>
+                      <div className={`text-xs ${t.cls}`}>{t.label}</div>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -290,6 +464,7 @@ export default function ScannerPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
+                      <TokenLogo symbol={result.symbol} size={36} />
                       <h2 className="text-2xl font-bold text-white">{result.name}</h2>
                       <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full font-medium">{result.symbol}</span>
                       <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full">{result.chain}</span>
@@ -430,13 +605,32 @@ export default function ScannerPage() {
 
               {/* Actions */}
               <div className="flex gap-3">
-                <button className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => downloadReport(result)}
+                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
                   <Download size={18} />
                   Download Report
                 </button>
-                <button className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    const cmds = [
+                      `# Install Daybreak`,
+                      `cargo install --path .`,
+                      ``,
+                      `# Scan this token`,
+                      `daybreak scan ${result.address}`,
+                      ``,
+                      `# Generate full report`,
+                      `daybreak report ${result.address} --output ./report`,
+                      result.nttCompatible ? `\n# Migrate (requires Solana keypair)\ndaybreak migrate ${result.address} --keypair ~/wallet.json` : `# Not eligible for migration`,
+                    ].join('\n');
+                    navigator.clipboard.writeText(cmds);
+                  }}
+                  className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
                   <Terminal size={18} />
-                  View CLI Commands
+                  Copy CLI Commands
                 </button>
               </div>
             </div>
