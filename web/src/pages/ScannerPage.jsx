@@ -24,10 +24,10 @@ import {
 function DaybreakLogo({ size = 28 }) {
   return (
     <img
-      src="/daybreak-logo.png"
+      src="/daybreak-logo-square.png"
       alt="Daybreak"
-      style={{ width: size * 1.6, height: size }}
-      className="object-contain"
+      style={{ width: size, height: size }}
+      className="object-contain rounded-lg"
     />
   );
 }
