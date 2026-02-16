@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/scan/:id",
+      "destination": "https://api.daybreakscan.com/scan/:id"
+    },
+    {
+      "source": "/api/scans/:path*",
+      "destination": "https://api.daybreakscan.com/api/scans/:path*"
+    }
+  ]
+}
