@@ -656,6 +656,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
+              <div className="mb-6">
+                <img
+                  src="/daybreak-logo.png"
+                  alt="Daybreak"
+                  className="h-16 md:h-20 object-contain"
+                />
+              </div>
               <h1
                 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight"
                 style={gradientTextStyleHero}
