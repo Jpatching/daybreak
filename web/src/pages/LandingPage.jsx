@@ -723,12 +723,6 @@ export default function LandingPage() {
             >
               <XIcon size={20} />
             </a>
-            <a
-              href="/scan"
-              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-md transition-colors text-sm"
-            >
-              Scan Token
-            </a>
           </div>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -766,13 +760,6 @@ export default function LandingPage() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <XIcon size={16} /> @DaybreakScan
-              </a>
-              <a
-                href="/scan"
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-md transition-colors text-center"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Scan Token
               </a>
             </div>
           </div>
