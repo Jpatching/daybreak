@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SunriseShader from '../components/SunriseShader';
 import {
   Shield,
   Search,
@@ -349,7 +350,7 @@ function MarketsSection() {
   const currentSlide = slides[marketSlide];
 
   return (
-    <section className="py-20 px-6 bg-slate-800/30">
+    <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
       <div className="max-w-4xl mx-auto">
         <h2
           className="text-3xl md:text-4xl font-bold text-center mb-2"
@@ -482,7 +483,7 @@ function AdvancedFeaturesSection() {
   );
 
   return (
-    <section className="py-20 px-6">
+    <section className="py-20 px-6 relative z-10">
       <div className="max-w-5xl mx-auto">
         <h2
           className="text-3xl md:text-4xl font-bold text-center mb-2"
@@ -585,9 +586,13 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen relative">
+      <SunriseShader />
+      {/* Dark overlay for content readability */}
+      <div className="fixed inset-0 z-[1] pointer-events-none bg-gradient-to-b from-slate-900/40 via-slate-900/30 to-slate-900/70" />
+
       {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
+      <nav className="fixed top-0 w-full z-50 bg-black/70 backdrop-blur-md border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
             <DaybreakLogo size={44} />
@@ -652,17 +657,10 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-28 pb-16 px-6">
+      <section className="pt-28 pb-16 px-6 relative z-10">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="mb-6">
-                <img
-                  src="/daybreak-logo.png"
-                  alt="Daybreak"
-                  className="h-16 md:h-20 object-contain"
-                />
-              </div>
               <h1
                 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight"
                 style={gradientTextStyleHero}
@@ -749,7 +747,7 @@ export default function LandingPage() {
       </section>
 
       {/* Ecosystem / Branding */}
-      <section className="py-10 px-6 border-y border-slate-700/30">
+      <section className="py-10 px-6 border-y border-white/5 relative z-10 bg-slate-900/60 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto">
           <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Built for the Sunrise Ecosystem</p>
           <div className="flex flex-col sm:flex-row justify-center items-center gap-8 sm:gap-12">
@@ -780,10 +778,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <UserTypeSection />
+      <div className="relative z-10"><UserTypeSection /></div>
 
       {/* Stats */}
-      <section className="py-8 border-y border-slate-700/50 overflow-hidden">
+      <section className="py-8 border-y border-white/5 overflow-hidden relative z-10 bg-slate-900/60 backdrop-blur-sm">
         <div
           className="flex gap-16 animate-scroll-stats"
           style={{ width: 'max-content' }}
@@ -812,7 +810,7 @@ export default function LandingPage() {
       </section>
 
       {/* Deployment Options */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 relative z-10">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
             Install & run
@@ -842,7 +840,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features - Conveyor Belt */}
-      <section className="mt-8 pb-0 bg-slate-800/30 overflow-hidden">
+      <section className="mt-8 pb-0 bg-slate-900/60 backdrop-blur-sm overflow-hidden relative z-10">
         <div className="max-w-7xl mx-auto px-6 text-center mb-4">
           <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
             Everything you need to migrate
@@ -909,7 +907,7 @@ export default function LandingPage() {
       <AdvancedFeaturesSection />
 
       {/* FAQ & Security */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 relative z-10">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
             FAQ
@@ -962,7 +960,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-6 bg-slate-800/30">
+      <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
             Ready to migrate?
@@ -990,7 +988,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-6 border-t border-slate-700">
+      <footer className="py-8 px-6 border-t border-white/5 relative z-10 bg-slate-900/80 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <DaybreakLogo size={20} />
