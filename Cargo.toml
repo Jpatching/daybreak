@@ -8,6 +8,10 @@ license = "MIT"
 keywords = ["solana", "ethereum", "migration", "ntt", "wormhole"]
 categories = ["command-line-utilities"]
 repository = "https://github.com/Jpatching/daybreak"
+readme = "README.md"
+homepage = "https://github.com/Jpatching/daybreak"
+rust-version = "1.70"
+exclude = ["demo.gif", "demo.cast", "DOCS/", "examples/"]
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
