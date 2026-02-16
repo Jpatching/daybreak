@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SunriseShader from '../components/SunriseShader';
 import {
@@ -119,6 +119,14 @@ function BnbIcon({ size = 28, className = '' }) {
   );
 }
 
+function XIcon({ size = 20, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  );
+}
+
 // ---------- Token logos ----------
 
 const TOKEN_LOGOS = {
@@ -188,19 +196,7 @@ const gradientTextStyleHero = {
 
 // ---------- Data ----------
 
-const features = [
-  { color: 'amber', title: 'Risk Scoring (0-100)', description: 'Composite score across 5 dimensions: decimals, token features, bytecode complexity, holder concentration, bridge status.' },
-  { color: 'green', title: 'NTT Mode Analysis', description: 'Auto-recommends Locking vs Burning mode. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.' },
-  { color: 'purple', title: 'Bytecode Inspection', description: 'Static analysis of EVM bytecode. Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.' },
-  { color: 'blue', title: 'Bridge Detection', description: 'Live WormholeScan API queries. Distinguishes Portal (wrapped), NTT (native), and natively-issued tokens.' },
-  { color: 'orange', title: 'SPL Deployment', description: 'Deploy SPL token on Solana with Metaplex metadata. Handles decimal trimming (18\u21928), mint authority transfer.' },
-  { color: 'red', title: 'End-to-End Migration', description: 'Scan \u2192 Deploy SPL \u2192 Write NTT config \u2192 Orchestrate NTT CLI \u2192 Verify. Full pipeline in one command.' },
-  { color: 'emerald', title: 'Multi-Chain Support', description: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche. Auto-detects chain-specific explorers.' },
-  { color: 'cyan', title: 'Rate Limit Intelligence', description: 'Calculates NTT rate limits from 24h transfer volume and supply. Conservative defaults with per-tx caps.' },
-  { color: 'pink', title: 'Holder Concentration', description: 'Etherscan top-10 holder analysis. Whale concentration scoring, governance token detection.' },
-  { color: 'yellow', title: 'Report Generation', description: 'Markdown + deployment.json + ntt-commands.sh. Ready-to-run migration scripts with cost estimates.' },
-  { color: 'purple', title: 'Token Discovery', description: 'Dynamic CoinGecko API integration. Find migration-ready tokens by market cap. Curated fallback for 55+ tokens.' },
-];
+// features data moved into BentoFeaturesSection
 
 const stats = [
   { value: '7', label: 'EVM Chains', icon: Globe },
@@ -573,6 +569,119 @@ function AdvancedFeaturesSection() {
   );
 }
 
+// ---------- Spotlight Bento Grid ----------
+
+const bentoFeatures = [
+  { icon: Shield, title: 'Risk Scoring (0-100)', desc: 'Composite score across 5 dimensions: decimals, features, bytecode, holders, bridge status.', color: 'amber', hero: true },
+  { icon: GitBranch, title: 'NTT Mode Analysis', desc: 'Auto-recommends Locking vs Burning. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.', color: 'green', hero: true },
+  { icon: Search, title: 'Bytecode Inspection', desc: 'Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.', color: 'purple' },
+  { icon: Eye, title: 'Bridge Detection', desc: 'WormholeScan API queries. Portal, NTT, and native token classification.', color: 'blue' },
+  { icon: Layers, title: 'SPL Deployment', desc: 'Metaplex metadata, decimal trimming (18\u21928), mint authority transfer.', color: 'orange' },
+  { icon: Rocket, title: 'End-to-End Migration', desc: 'Scan \u2192 Deploy SPL \u2192 Config NTT \u2192 CLI \u2192 Verify. One command.', color: 'red', hero: true },
+  { icon: Globe, title: 'Multi-Chain', desc: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche.', color: 'emerald' },
+  { icon: Scale, title: 'Rate Limits', desc: 'NTT rate limits from 24h volume and supply with per-tx caps.', color: 'cyan' },
+  { icon: Database, title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection.', color: 'pink' },
+  { icon: FileText, title: 'Report Generation', desc: 'Markdown + deployment.json + ntt-commands.sh with cost estimates.', color: 'yellow' },
+  { icon: Target, title: 'Token Discovery', desc: 'CoinGecko API. Find migration-ready tokens by market cap.', color: 'emerald' },
+];
+
+const bentoIconColors = {
+  amber: 'text-amber-400',
+  green: 'text-green-400',
+  purple: 'text-purple-400',
+  blue: 'text-blue-400',
+  orange: 'text-orange-400',
+  red: 'text-red-400',
+  emerald: 'text-emerald-400',
+  cyan: 'text-cyan-400',
+  pink: 'text-pink-400',
+  yellow: 'text-yellow-400',
+};
+
+function BentoFeaturesSection() {
+  const [visible, setVisible] = useState(false);
+  const sectionRef = useRef(null);
+  const cardsRef = useRef([]);
+  const spotsRef = useRef([]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { threshold: 0.1 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const handlePointerMove = (e) => {
+    cardsRef.current.forEach((card, i) => {
+      if (!card || !spotsRef.current[i]) return;
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      spotsRef.current[i].style.background =
+        `radial-gradient(600px circle at ${x}px ${y}px, rgba(251, 191, 36, 0.06), transparent 40%)`;
+      spotsRef.current[i].style.opacity = '1';
+    });
+  };
+
+  const handlePointerLeave = () => {
+    spotsRef.current.forEach(spot => {
+      if (spot) spot.style.opacity = '0';
+    });
+  };
+
+  return (
+    <section ref={sectionRef} className="py-20 px-6 relative z-10">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+          Everything you need to migrate
+        </h2>
+        <p className="text-slate-400 text-center mb-12">
+          Complete tooling for EVM-to-Solana token migration via Wormhole NTT.
+        </p>
+
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+          style={{ gridAutoFlow: 'dense' }}
+          onPointerMove={handlePointerMove}
+          onPointerLeave={handlePointerLeave}
+        >
+          {bentoFeatures.map((feature, i) => {
+            const Icon = feature.icon;
+            return (
+              <div
+                key={feature.title}
+                ref={el => { cardsRef.current[i] = el; }}
+                className={`group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl hover:border-amber-400/20 hover:bg-white/[0.06] ${feature.hero ? 'sm:col-span-2' : ''}`}
+                style={{
+                  opacity: visible ? 1 : 0,
+                  transform: visible ? 'translateY(0)' : 'translateY(24px)',
+                  transition: `opacity 0.6s ease ${i * 60}ms, transform 0.6s ease ${i * 60}ms, border-color 0.3s, background-color 0.3s`,
+                }}
+              >
+                {/* Spotlight overlay */}
+                <div
+                  ref={el => { spotsRef.current[i] = el; }}
+                  className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-500"
+                />
+                {/* Content */}
+                <div className="relative z-10 p-6">
+                  <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/[0.05] mb-4 ${bentoIconColors[feature.color]}`}>
+                    <Icon size={20} />
+                  </div>
+                  <h3 className="text-white font-semibold text-sm mb-2">{feature.title}</h3>
+                  <p className="text-slate-400 text-xs leading-relaxed">{feature.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---------- Main Page ----------
 
 export default function LandingPage() {
@@ -605,9 +714,17 @@ export default function LandingPage() {
               rel="noopener noreferrer"
               className="text-slate-400 hover:text-white transition-colors"
             >
-              <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
               </svg>
+            </a>
+            <a
+              href="https://x.com/DaybreakScan"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <XIcon size={20} />
             </a>
             <a
               href="/scan"
@@ -643,6 +760,15 @@ export default function LandingPage() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 GitHub
+              </a>
+              <a
+                href="https://x.com/DaybreakScan"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-300 hover:text-white transition-colors py-2 flex items-center gap-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <XIcon size={16} /> @DaybreakScan
               </a>
               <a
                 href="/scan"
@@ -839,66 +965,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features - Conveyor Belt */}
-      <section className="mt-8 pb-0 bg-slate-900/60 backdrop-blur-sm overflow-hidden relative z-10">
-        <div className="max-w-7xl mx-auto px-6 text-center mb-4">
-          <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
-            Everything you need to migrate
-          </h2>
-          <p className="text-slate-400">
-            Complete tooling for EVM-to-Solana token migration via Wormhole NTT.
-          </p>
-        </div>
-
-        {/* Row 1 - scrolls left */}
-        <div className="relative mb-6">
-          <div className="flex gap-6 animate-scroll-left" style={{ width: 'max-content' }}>
-            {[...features, ...features].map((feature, idx) => (
-              <div
-                key={`row1-${idx}`}
-                className="flex-shrink-0 p-6 bg-slate-800/60 border border-slate-700 rounded-xl"
-                style={{ width: '400px' }}
-              >
-                <h3 className="text-base font-semibold text-white mb-1">{feature.title}</h3>
-                <p className="text-slate-400 text-sm">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Row 2 - scrolls right */}
-        <div className="relative">
-          <div className="flex gap-6 animate-scroll-right" style={{ width: 'max-content' }}>
-            {[...features, ...features].map((feature, idx) => (
-              <div
-                key={`row2-${idx}`}
-                className="flex-shrink-0 p-6 bg-slate-800/60 border border-slate-700 rounded-xl"
-                style={{ width: '400px' }}
-              >
-                <h3 className="text-base font-semibold text-white mb-1">{feature.title}</h3>
-                <p className="text-slate-400 text-sm">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <style>{`
-          @keyframes scroll-left {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-50%); }
-          }
-          @keyframes scroll-right {
-            0% { transform: translateX(-50%); }
-            100% { transform: translateX(0); }
-          }
-          .animate-scroll-left {
-            animation: scroll-left 30s linear infinite;
-          }
-          .animate-scroll-right {
-            animation: scroll-right 30s linear infinite;
-          }
-        `}</style>
-      </section>
+      {/* Features - Spotlight Bento Grid */}
+      <BentoFeaturesSection />
 
       {/* Markets / Analysis */}
       <MarketsSection />
@@ -997,6 +1065,10 @@ export default function LandingPage() {
           <div className="flex items-center gap-6 text-slate-400 text-sm flex-wrap justify-center">
             <a href="/scan" className="hover:text-white transition-colors">Scanner</a>
             <a href="https://github.com/Jpatching/daybreak" className="hover:text-white transition-colors">GitHub</a>
+            <a href="https://x.com/DaybreakScan" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+              <XIcon size={14} />
+              Twitter
+            </a>
             <a href="https://wormhole.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
               <WormholeIcon size={14} />
               Wormhole
