@@ -572,17 +572,17 @@ function AdvancedFeaturesSection() {
 // ---------- Spotlight Bento Grid ----------
 
 const bentoFeatures = [
-  { icon: Shield, title: 'Risk Scoring (0-100)', desc: 'Composite score across 5 dimensions: decimals, features, bytecode, holders, bridge status.', color: 'amber', hero: true },
-  { icon: GitBranch, title: 'NTT Mode Analysis', desc: 'Auto-recommends Locking vs Burning. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.', color: 'green', hero: true },
-  { icon: Search, title: 'Bytecode Inspection', desc: 'Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.', color: 'purple' },
-  { icon: Eye, title: 'Bridge Detection', desc: 'WormholeScan API queries. Portal, NTT, and native token classification.', color: 'blue' },
-  { icon: Layers, title: 'SPL Deployment', desc: 'Metaplex metadata, decimal trimming (18\u21928), mint authority transfer.', color: 'orange' },
-  { icon: Rocket, title: 'End-to-End Migration', desc: 'Scan \u2192 Deploy SPL \u2192 Config NTT \u2192 CLI \u2192 Verify. One command.', color: 'red', hero: true },
-  { icon: Globe, title: 'Multi-Chain', desc: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche.', color: 'emerald' },
-  { icon: Scale, title: 'Rate Limits', desc: 'NTT rate limits from 24h volume and supply with per-tx caps.', color: 'cyan' },
-  { icon: Database, title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection.', color: 'pink' },
-  { icon: FileText, title: 'Report Generation', desc: 'Markdown + deployment.json + ntt-commands.sh with cost estimates.', color: 'yellow' },
-  { icon: Target, title: 'Token Discovery', desc: 'CoinGecko API. Find migration-ready tokens by market cap.', color: 'emerald' },
+  { tag: '0-100', title: 'Risk Scoring', desc: 'Composite score across 5 dimensions: decimals, features, bytecode, holders, bridge status.', color: 'amber', hero: true },
+  { tag: 'NTT', title: 'Mode Analysis', desc: 'Auto-recommends Locking vs Burning. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.', color: 'green', hero: true },
+  { tag: '0x..', title: 'Bytecode Inspection', desc: 'Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.', color: 'purple' },
+  { tag: 'WH', title: 'Bridge Detection', desc: 'WormholeScan API queries. Portal, NTT, and native token classification.', color: 'blue' },
+  { tag: 'SPL', title: 'Token Deployment', desc: 'Metaplex metadata, decimal trimming (18\u21928), mint authority transfer.', color: 'orange' },
+  { tag: 'E2E', title: 'Full Migration', desc: 'Scan \u2192 Deploy SPL \u2192 Config NTT \u2192 CLI \u2192 Verify. One command.', color: 'red', hero: true },
+  { tag: '7ch', title: 'Multi-Chain', desc: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche.', color: 'emerald' },
+  { tag: 'RL', title: 'Rate Limits', desc: 'NTT rate limits from 24h volume and supply with per-tx caps.', color: 'cyan' },
+  { tag: 'T10', title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection.', color: 'pink' },
+  { tag: '.md', title: 'Report Generation', desc: 'Markdown + deployment.json + ntt-commands.sh with cost estimates.', color: 'yellow' },
+  { tag: 'API', title: 'Token Discovery', desc: 'CoinGecko integration. Find migration-ready tokens by market cap.', color: 'emerald' },
 ];
 
 const bentoIconColors = {
@@ -647,9 +647,7 @@ function BentoFeaturesSection() {
           onPointerMove={handlePointerMove}
           onPointerLeave={handlePointerLeave}
         >
-          {bentoFeatures.map((feature, i) => {
-            const Icon = feature.icon;
-            return (
+          {bentoFeatures.map((feature, i) => (
               <div
                 key={feature.title}
                 ref={el => { cardsRef.current[i] = el; }}
@@ -667,15 +665,14 @@ function BentoFeaturesSection() {
                 />
                 {/* Content */}
                 <div className="relative z-10 p-6">
-                  <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/[0.05] mb-4 ${bentoIconColors[feature.color]}`}>
-                    <Icon size={20} />
-                  </div>
+                  <span className={`inline-block px-2.5 py-1 rounded-lg bg-white/[0.05] mb-4 font-mono text-xs font-bold tracking-wide ${bentoIconColors[feature.color]}`}>
+                    {feature.tag}
+                  </span>
                   <h3 className="text-white font-semibold text-sm mb-2">{feature.title}</h3>
                   <p className="text-slate-400 text-xs leading-relaxed">{feature.desc}</p>
                 </div>
               </div>
-            );
-          })}
+          ))}
         </div>
       </div>
     </section>
