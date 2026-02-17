@@ -15,7 +15,7 @@ import { TTLCache } from '../services/cache';
 import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
-const scanCache = new TTLCache<DeployerScan>(300); // 5 min TTL
+const scanCache = new TTLCache<DeployerScan>(1800); // 30 min TTL — saves Helius + DexScreener calls
 
 router.get('/:token_address', async (req: Request, res: Response) => {
   const token_address = req.params.token_address as string;
@@ -52,8 +52,10 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     // Step 3: Find all tokens this deployer created via Pump.fun
     const deployerTokenMints = await findDeployerTokens(deployerWallet);
 
-    // Safety net: always include the scanned token if not already found
-    if (!deployerTokenMints.includes(token_address)) {
+    // Safety net: include the scanned token if not already found,
+    // but only if the deployer is DIFFERENT from the token address.
+    // (If they're the same, the user entered a wallet address, not a token.)
+    if (deployerWallet !== token_address && !deployerTokenMints.includes(token_address)) {
       deployerTokenMints.unshift(token_address);
     }
 

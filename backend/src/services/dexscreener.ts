@@ -4,8 +4,8 @@ import { TTLCache } from './cache';
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex';
 const ALIVE_LIQUIDITY_THRESHOLD = 100; // USD
 
-// Cache token status for 1 hour to avoid redundant DexScreener calls
-const dexCache = new TTLCache<TokenStatus>(3600);
+// Cache token status for 2 hours to reduce DexScreener API calls
+const dexCache = new TTLCache<TokenStatus>(7200);
 
 interface TokenStatus {
   alive: boolean;
@@ -81,7 +81,7 @@ export async function bulkCheckTokens(
     try {
       const res = await fetch(`${DEXSCREENER_API}/tokens/${joined}`);
       if (!res.ok) {
-        batch.forEach(addr => results.set(addr, { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null }));
+        // Don't cache HTTP errors — leave tokens out of results for retry
         continue;
       }
 
@@ -129,11 +129,8 @@ export async function bulkCheckTokens(
         dexCache.set(addr, status);
       }
     } catch {
-      batch.forEach(addr => {
-        const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
-        results.set(addr, dead);
-        dexCache.set(addr, dead);
-      });
+      // Don't cache error results — leave errored tokens out of results
+      // so they're retried next request and not falsely marked as dead
     }
 
     // Small delay between batches to avoid rate limiting

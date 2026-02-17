@@ -14,7 +14,7 @@ import { TTLCache } from '../services/cache';
 import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
-const walletCache = new TTLCache<DeployerScan>(300);
+const walletCache = new TTLCache<DeployerScan>(1800); // 30 min TTL
 
 router.get('/:wallet_address', async (req: Request, res: Response) => {
   const wallet_address = req.params.wallet_address as string;

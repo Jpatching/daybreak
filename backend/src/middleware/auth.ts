@@ -31,9 +31,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   if (!checkRateLimit(wallet)) {
     const remaining = getRemainingScans(wallet);
     res.status(429).json({
-      error: 'Rate limit exceeded. Max 10 scans per hour.',
+      error: 'Daily scan limit reached. 3 free scans per day.',
       remaining,
-      retry_after: '1 hour',
+      retry_after: '24 hours',
     });
     return;
   }
