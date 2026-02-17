@@ -17,8 +17,12 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
   const rugComponent = (1 - input.rugRate) * 40;
 
   // Token count penalty (20% weight) — more tokens = more suspicious (log scale)
-  // 1 token = 20, 10 tokens = 13.3, 100 tokens = 6.7, 1000 tokens = 0
-  const tokenPenalty = Math.max(0, 20 * (1 - Math.log10(Math.max(1, input.tokenCount)) / 3));
+  // Scale penalty by rug rate: many tokens is only suspicious if most are dead
+  // Low rug rate → reduced penalty; high rug rate → full penalty
+  const baseTokenPenalty = Math.max(0, 20 * (1 - Math.log10(Math.max(1, input.tokenCount)) / 3));
+  const lostPoints = 20 - baseTokenPenalty;
+  const rugScaleFactor = Math.min(1, input.rugRate / 0.5); // full penalty at 50%+ rug rate
+  const tokenPenalty = 20 - lostPoints * rugScaleFactor;
 
   // Average lifespan (20% weight) — longer lived tokens = better
   const lifespanScore = Math.min(20, input.avgLifespanDays * 0.5);
@@ -28,10 +32,11 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
 
   const score = Math.round(rugComponent + tokenPenalty + lifespanScore + clusterPenalty);
 
+  // Verdict based on composite score, with rug rate override
   let verdict: Verdict;
-  if (input.rugRate > 0.7) {
+  if (input.rugRate > 0.8 || score < 30) {
     verdict = 'SERIAL_RUGGER';
-  } else if (input.rugRate > 0.3) {
+  } else if (score < 60) {
     verdict = 'SUSPICIOUS';
   } else {
     verdict = 'CLEAN';

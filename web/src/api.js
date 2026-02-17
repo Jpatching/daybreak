@@ -25,3 +25,7 @@ export async function scanWallet(address, token) {
 export async function checkHealth() {
   return apiFetch(`${API_BASE}/health`);
 }
+
+export async function fetchUsage(token) {
+  return apiFetch(`${API_BASE}/auth/usage`, token);
+}

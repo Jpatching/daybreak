@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '../hooks/useAuth';
-import { scanToken } from '../api';
+import { scanToken, fetchUsage } from '../api';
 import {
   Search,
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
   Eye,
   TrendingUp,
   ExternalLink,
+  Clock,
 } from 'lucide-react';
 
 // ---------- Branding ----------
@@ -49,7 +50,6 @@ const gradientTextStyle = {
 function ReputationGauge({ score }) {
   const c = 2 * Math.PI * 45;
   const offset = c - (score / 100) * c;
-  // FLIPPED: high score = green (good), low score = red (rugger)
   const color = score >= 70 ? '#22c55e' : score >= 30 ? '#eab308' : '#ef4444';
   return (
     <div className="relative w-28 h-28">
@@ -86,6 +86,32 @@ function VerdictBadge({ verdict }) {
   );
 }
 
+// ---------- Usage Badge ----------
+
+function UsageBadge({ usage }) {
+  if (!usage) return null;
+  const pct = (usage.scans_used / usage.scans_limit) * 100;
+  const barColor = usage.scans_remaining <= 2 ? 'bg-red-500' : usage.scans_remaining <= 5 ? 'bg-yellow-500' : 'bg-amber-500';
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/80 rounded-lg border border-slate-700">
+      <Clock size={14} className="text-slate-500 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="text-slate-400">
+            {usage.scans_used}/{usage.scans_limit} free scans used today
+          </span>
+          <span className={usage.scans_remaining <= 2 ? 'text-red-400 font-semibold' : 'text-slate-500'}>
+            {usage.scans_remaining} remaining
+          </span>
+        </div>
+        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Address truncation ----------
 
 function truncAddr(addr) {
@@ -101,10 +127,21 @@ function solscanUrl(addr) {
 
 const ERROR_MESSAGES = {
   AUTH_REQUIRED: 'Please connect your wallet and sign in to scan.',
-  RATE_LIMITED: 'Rate limit exceeded. Max 10 scans per hour. Try again later.',
+  RATE_LIMITED: 'Daily scan limit reached. You get 3 free scans per day.',
   NOT_FOUND: 'Token not found. Make sure this is a valid Solana token address.',
   SERVICE_UNAVAILABLE: 'Backend is temporarily unavailable. Try again in a moment.',
 };
+
+// ---------- Scan progress steps ----------
+
+const SCAN_STEPS = [
+  'Resolving token metadata...',
+  'Finding deployer wallet...',
+  'Scanning deployer history...',
+  'Checking token statuses...',
+  'Analyzing funding cluster...',
+  'Calculating reputation...',
+];
 
 // ---------- Main ----------
 
@@ -116,9 +153,28 @@ export default function ScannerPage() {
 
   const [query, setQuery] = useState(urlAddress || '');
   const [scanning, setScanning] = useState(false);
+  const [scanStep, setScanStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [usage, setUsage] = useState(null);
+
+  // Fetch usage on auth
+  const refreshUsage = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await fetchUsage(token);
+      setUsage(data);
+    } catch {
+      // non-critical
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      refreshUsage();
+    }
+  }, [isAuthenticated, token, refreshUsage]);
 
   // Auto-login when wallet connects
   useEffect(() => {
@@ -138,12 +194,24 @@ export default function ScannerPage() {
     setScanning(true);
     setResult(null);
     setError(null);
+    setScanStep(0);
+
+    // Animate progress steps
+    const stepInterval = setInterval(() => {
+      setScanStep(prev => (prev < SCAN_STEPS.length - 1 ? prev + 1 : prev));
+    }, 2500);
+
     try {
       const data = await scanToken(address, token);
       setResult(data);
+      // Update usage from scan response
+      if (data.usage) setUsage(data.usage);
     } catch (err) {
       setError(err.message);
+      // Refresh usage on error too (might be rate limited)
+      refreshUsage();
     } finally {
+      clearInterval(stepInterval);
       setScanning(false);
     }
   }
@@ -204,9 +272,16 @@ export default function ScannerPage() {
           <h1 className="text-3xl font-bold text-center mb-2" style={gradientTextStyle}>
             Deployer Reputation Scanner
           </h1>
-          <p className="text-slate-400 text-center mb-8">
+          <p className="text-slate-400 text-center mb-6">
             Paste a Solana token address to analyze the deployer's reputation.
           </p>
+
+          {/* Usage bar — always visible when authenticated */}
+          {isAuthenticated && usage && (
+            <div className="mb-6">
+              <UsageBadge usage={usage} />
+            </div>
+          )}
 
           {/* Search */}
           <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
@@ -222,7 +297,7 @@ export default function ScannerPage() {
             </div>
             <button
               type="submit"
-              disabled={scanning || !isAuthenticated}
+              disabled={scanning || !isAuthenticated || (usage && usage.scans_remaining <= 0)}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {scanning ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
@@ -267,12 +342,26 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Loading */}
+          {/* Loading with progress steps */}
           {scanning && (
-            <div className="text-center py-20">
-              <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-4" />
-              <p className="text-slate-400">Scanning deployer history...</p>
-              <p className="text-xs text-slate-600 mt-2">This may take 5-15 seconds</p>
+            <div className="text-center py-16">
+              <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-6" />
+              <div className="space-y-2 max-w-xs mx-auto">
+                {SCAN_STEPS.map((step, i) => (
+                  <div key={i} className={`flex items-center gap-2 text-sm transition-all duration-300 ${
+                    i < scanStep ? 'text-green-400' : i === scanStep ? 'text-amber-400' : 'text-slate-600'
+                  }`}>
+                    {i < scanStep ? (
+                      <CheckCircle2 size={14} className="flex-shrink-0" />
+                    ) : i === scanStep ? (
+                      <Loader2 size={14} className="animate-spin flex-shrink-0" />
+                    ) : (
+                      <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
+                    )}
+                    {step}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -281,6 +370,11 @@ export default function ScannerPage() {
             <div className="text-center py-16">
               <XCircle className="w-12 h-12 text-red-500/50 mx-auto mb-4" />
               <p className="text-slate-400 mb-2">{ERROR_MESSAGES[error] || `Error: ${error}`}</p>
+              {error === 'RATE_LIMITED' && usage && (
+                <p className="text-xs text-slate-600 mt-2">
+                  {usage.scans_used}/{usage.scans_limit} scans used today. Resets in 24 hours.
+                </p>
+              )}
               {error === 'AUTH_REQUIRED' && (
                 <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-10 !px-6 hover:!bg-amber-400 mx-auto mt-4" />
               )}
@@ -326,7 +420,7 @@ export default function ScannerPage() {
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Wallet</div>
                     <a
-                      href={solscanUrl(result.deployer.wallet)}
+                      href={result.evidence?.deployer_url || solscanUrl(result.deployer.wallet)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
@@ -380,6 +474,11 @@ export default function ScannerPage() {
                   <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <TrendingUp size={14} />
                     Deployer's Tokens ({result.deployer.tokens.length})
+                    {(result.deployer.tokens_unverified > 0 || (result.confidence?.tokens_unverified || 0) > 0) && (
+                      <span className="text-yellow-500 font-normal normal-case">
+                        + {result.confidence?.tokens_unverified || result.deployer.tokens_unverified} unverified
+                      </span>
+                    )}
                   </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -388,7 +487,8 @@ export default function ScannerPage() {
                           <th className="text-left pb-3 pr-4">Token</th>
                           <th className="text-left pb-3 pr-4">Symbol</th>
                           <th className="text-left pb-3 pr-4">Status</th>
-                          <th className="text-right pb-3">Liquidity</th>
+                          <th className="text-right pb-3 pr-4">Liquidity</th>
+                          <th className="text-right pb-3 w-8"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -414,8 +514,19 @@ export default function ScannerPage() {
                                 {t.alive ? 'Alive' : 'Dead'}
                               </span>
                             </td>
-                            <td className="py-2 text-right font-mono text-xs text-slate-400">
+                            <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
                               ${t.liquidity?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}
+                            </td>
+                            <td className="py-2 text-right">
+                              <a
+                                href={t.dexscreener_url || `https://dexscreener.com/solana/${t.address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-500 hover:text-amber-400 transition-colors"
+                                title="View on DexScreener"
+                              >
+                                <ExternalLink size={12} />
+                              </a>
                             </td>
                           </tr>
                         ))}
@@ -439,7 +550,7 @@ export default function ScannerPage() {
                     <div className="text-xs text-slate-500 mb-1">Funding Source</div>
                     {result.funding.source_wallet ? (
                       <a
-                        href={solscanUrl(result.funding.source_wallet)}
+                        href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
@@ -505,6 +616,75 @@ export default function ScannerPage() {
                         : `This deployer has rugged ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${(result.deployer.rug_rate * 100).toFixed(1)}%). Do NOT invest.`}
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* Evidence & Confidence */}
+              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Eye size={14} />
+                  Evidence & Confidence
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-4">
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Tokens Verified</div>
+                    <div className="text-lg font-semibold text-green-400">
+                      {result.confidence?.tokens_verified ?? result.deployer.tokens.length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Tokens Unverified</div>
+                    <div className={`text-lg font-semibold ${(result.confidence?.tokens_unverified || result.deployer.tokens_unverified || 0) > 0 ? 'text-yellow-400' : 'text-slate-400'}`}>
+                      {result.confidence?.tokens_unverified ?? result.deployer.tokens_unverified ?? 0}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Detection Method</div>
+                    <div className="text-sm text-slate-300">
+                      {result.confidence?.deployer_method === 'enhanced_api' ? 'Enhanced API'
+                        : result.confidence?.deployer_method === 'rpc_fallback' ? 'RPC Fallback'
+                        : 'Enhanced API'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Cluster Checked</div>
+                    <div className="text-sm text-slate-300">
+                      {result.confidence?.cluster_checked === true ? 'Yes'
+                        : result.confidence?.cluster_checked === false ? 'No'
+                        : result.funding?.source_wallet ? 'Yes' : 'No'}
+                    </div>
+                  </div>
+                </div>
+                {/* Evidence links — always show deployer link */}
+                <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-700">
+                  <a
+                    href={result.evidence?.deployer_url || solscanUrl(result.deployer.wallet)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 bg-amber-500/10 px-2 py-1 rounded"
+                  >
+                    Deployer on Solscan <ExternalLink size={10} />
+                  </a>
+                  {(result.evidence?.funding_source_url || result.funding?.source_wallet) && (
+                    <a
+                      href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 bg-amber-500/10 px-2 py-1 rounded"
+                    >
+                      Funder on Solscan <ExternalLink size={10} />
+                    </a>
+                  )}
+                  {result.evidence?.creation_tx_url && (
+                    <a
+                      href={result.evidence.creation_tx_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 bg-amber-500/10 px-2 py-1 rounded"
+                    >
+                      Creation Tx <ExternalLink size={10} />
+                    </a>
+                  )}
                 </div>
               </div>
 
