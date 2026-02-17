@@ -24,15 +24,17 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     return;
   }
 
-  // Check cache — still attach fresh usage info
+  // Check cache — clone to avoid mutating shared object, attach fresh usage info
   const cached = walletCache.get(wallet_address);
   if (cached) {
-    cached.usage = {
-      scans_used: req.scansUsed || 0,
-      scans_limit: req.scansLimit || 10,
-      scans_remaining: req.scansRemaining || 0,
-    };
-    res.json(cached);
+    res.json({
+      ...cached,
+      usage: {
+        scans_used: req.scansUsed || 0,
+        scans_limit: req.scansLimit || 3,
+        scans_remaining: req.scansRemaining || 0,
+      },
+    });
     return;
   }
 
@@ -148,12 +150,13 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       tokens_unverified: unknownCount,
       deployer_method: 'enhanced_api', // wallet scans always use enhanced API via findDeployerTokens
       cluster_checked: clusterChecked,
+      token_risks_checked: false, // wallet scans have no single target token
     };
 
     // Build usage info
     const usage: ScanUsage = {
       scans_used: req.scansUsed || 0,
-      scans_limit: req.scansLimit || 10,
+      scans_limit: req.scansLimit || 3,
       scans_remaining: req.scansRemaining || 0,
     };
 
@@ -172,6 +175,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       },
       funding,
       verdict,
+      token_risks: null,
       evidence,
       confidence,
       usage,

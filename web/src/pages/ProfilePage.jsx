@@ -314,6 +314,31 @@ export default function ProfilePage() {
                           </span>
                         </div>
                       </div>
+                      <div className="bg-slate-900 rounded px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">GET</span>
+                          <code className="text-xs text-slate-300 font-mono">/paid/deployer/:token_address</code>
+                          <span className="text-xs text-purple-400/60 ml-auto flex items-center gap-1">
+                            x402
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 rounded px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">GET</span>
+                          <code className="text-xs text-slate-300 font-mono">/paid/wallet/:wallet_address</code>
+                          <span className="text-xs text-purple-400/60 ml-auto flex items-center gap-1">
+                            x402
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 rounded px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">GET</span>
+                          <code className="text-xs text-slate-300 font-mono">/x402/stats</code>
+                          <span className="text-xs text-slate-600 ml-auto">Public</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -331,6 +356,15 @@ export default function ProfilePage() {
                     <p className="text-xs text-slate-400">
                       Free tier: <span className="text-white font-semibold">{usage?.scans_limit || 3} scans per day</span> per wallet.
                       Cached results (30 min TTL) do not count against your limit.
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-700">
+                    <div className="text-xs text-slate-500 mb-1.5">x402 Paid Access (Agents & Bots)</div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      The <code className="text-purple-400">/paid/*</code> endpoints accept x402 payments — <span className="text-white font-semibold">$0.01 USDC</span> per scan on Solana.
+                      No JWT needed. Send an <code className="text-amber-400">X-PAYMENT</code> header with a signed payment payload.
+                      Verified via the Coinbase facilitator. Ideal for AI agents and MCP integrations.
                     </p>
                   </div>
                 </div>

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '../hooks/useAuth';
-import { scanToken, fetchUsage } from '../api';
+import { scanToken, scanTokenPaid, fetchUsage, PaymentRequiredError } from '../api';
 import {
   Search,
   ArrowLeft,
@@ -21,6 +21,7 @@ import {
   TrendingUp,
   ExternalLink,
   Clock,
+  CreditCard,
 } from 'lucide-react';
 
 // ---------- Branding ----------
@@ -112,6 +113,44 @@ function UsageBadge({ usage }) {
   );
 }
 
+// ---------- Payment Prompt ----------
+
+function PaymentPrompt({ paymentInfo, onPay, paying }) {
+  if (!paymentInfo) return null;
+  return (
+    <div className="text-center py-10">
+      <CreditCard className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
+      <h3 className="text-lg font-semibold text-white mb-2">Free scans used up</h3>
+      <p className="text-slate-400 text-sm mb-1">
+        You've used all 3 free scans for today.
+      </p>
+      <p className="text-slate-400 text-sm mb-6">
+        Pay <span className="text-amber-400 font-semibold">${paymentInfo.priceUsd} USDC</span> on Solana for an extra scan.
+      </p>
+      <button
+        onClick={onPay}
+        disabled={paying}
+        className="inline-flex items-center gap-2 px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50"
+      >
+        {paying ? (
+          <>
+            <Loader2 size={18} className="animate-spin" />
+            Processing payment...
+          </>
+        ) : (
+          <>
+            <CreditCard size={18} />
+            Pay ${paymentInfo.priceUsd} USDC & Scan
+          </>
+        )}
+      </button>
+      <p className="text-xs text-slate-600 mt-4">
+        Payment via x402 protocol. USDC on Solana mainnet.
+      </p>
+    </div>
+  );
+}
+
 // ---------- Address truncation ----------
 
 function truncAddr(addr) {
@@ -148,7 +187,7 @@ const SCAN_STEPS = [
 export default function ScannerPage() {
   const { address: urlAddress } = useParams();
   const navigate = useNavigate();
-  const { connected } = useWallet();
+  const { connected, publicKey, signMessage } = useWallet();
   const { isAuthenticated, token, login, loading: authLoading, error: authError } = useAuth();
 
   const [query, setQuery] = useState(urlAddress || '');
@@ -158,6 +197,10 @@ export default function ScannerPage() {
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [usage, setUsage] = useState(null);
+
+  // x402 payment state
+  const [paymentInfo, setPaymentInfo] = useState(null); // { priceUsd, details, address }
+  const [paying, setPaying] = useState(false);
 
   // Fetch usage on auth
   const refreshUsage = useCallback(async () => {
@@ -194,6 +237,7 @@ export default function ScannerPage() {
     setScanning(true);
     setResult(null);
     setError(null);
+    setPaymentInfo(null);
     setScanStep(0);
 
     // Animate progress steps
@@ -207,7 +251,16 @@ export default function ScannerPage() {
       // Update usage from scan response
       if (data.usage) setUsage(data.usage);
     } catch (err) {
-      setError(err.message);
+      if (err instanceof PaymentRequiredError) {
+        // Show payment prompt instead of error
+        setPaymentInfo({
+          priceUsd: err.priceUsd || 0.01,
+          details: err.details,
+          address,
+        });
+      } else {
+        setError(err.message);
+      }
       // Refresh usage on error too (might be rate limited)
       refreshUsage();
     } finally {
@@ -216,10 +269,87 @@ export default function ScannerPage() {
     }
   }
 
+  async function handlePayAndScan() {
+    if (!paymentInfo || !publicKey || !signMessage) return;
+
+    setPaying(true);
+    setError(null);
+
+    try {
+      const details = paymentInfo.details;
+      if (!details?.accepts?.length) {
+        throw new Error('No payment options available');
+      }
+
+      const option = details.accepts[0];
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Build the message to sign (must match server's expected format)
+      const message = JSON.stringify({
+        scheme: option.scheme,
+        network: option.network,
+        asset: option.asset,
+        amount: option.maxAmountRequired,
+        payTo: option.payTo,
+        nonce,
+        timestamp,
+        validUntil: option.validUntil ?? timestamp + 300,
+      });
+
+      // SHA-256 hash of the message
+      const messageBytes = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', messageBytes);
+      const hashArray = new Uint8Array(hashBuffer);
+
+      // Sign with wallet adapter (Ed25519)
+      const signatureBytes = await signMessage(hashArray);
+
+      // Encode as base58
+      const bs58Module = await import('bs58');
+      const signature = bs58Module.default.encode(signatureBytes);
+
+      const payload = {
+        paymentOption: option,
+        signature,
+        payer: publicKey.toBase58(),
+        nonce,
+        timestamp,
+      };
+
+      const paymentHeader = btoa(JSON.stringify(payload));
+
+      // Run the scan with payment
+      setScanning(true);
+      setScanStep(0);
+      const stepInterval = setInterval(() => {
+        setScanStep(prev => (prev < SCAN_STEPS.length - 1 ? prev + 1 : prev));
+      }, 2500);
+
+      try {
+        const data = await scanTokenPaid(paymentInfo.address, paymentHeader);
+        setResult(data);
+        setPaymentInfo(null);
+      } finally {
+        clearInterval(stepInterval);
+        setScanning(false);
+      }
+    } catch (err) {
+      setPaymentInfo(null);
+      setError(`Payment failed: ${err.message}`);
+    } finally {
+      setPaying(false);
+    }
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) navigate(`/scan/${query.trim()}`);
   };
+
+  // Allow scan button even if scans_remaining is 0 (will trigger payment flow)
+  const canScan = isAuthenticated && !scanning;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -301,7 +431,7 @@ export default function ScannerPage() {
             </div>
             <button
               type="submit"
-              disabled={scanning || !isAuthenticated || (usage && usage.scans_remaining <= 0)}
+              disabled={!canScan}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {scanning ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
@@ -338,7 +468,7 @@ export default function ScannerPage() {
           )}
 
           {/* Ready to scan (authenticated, no scan yet) */}
-          {isAuthenticated && !urlAddress && !scanning && !result && (
+          {isAuthenticated && !urlAddress && !scanning && !result && !paymentInfo && (
             <div className="text-center py-16">
               <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
@@ -369,8 +499,17 @@ export default function ScannerPage() {
             </div>
           )}
 
+          {/* Payment prompt (402) */}
+          {paymentInfo && !scanning && !result && (
+            <PaymentPrompt
+              paymentInfo={paymentInfo}
+              onPay={handlePayAndScan}
+              paying={paying}
+            />
+          )}
+
           {/* Error states */}
-          {error && !scanning && (
+          {error && !scanning && !paymentInfo && (
             <div className="text-center py-16">
               <XCircle className="w-12 h-12 text-red-500/50 mx-auto mb-4" />
               <p className="text-slate-400 mb-2">{ERROR_MESSAGES[error] || `Error: ${error}`}</p>

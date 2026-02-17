@@ -8,11 +8,15 @@ import {
   findFundingSource,
   getSignaturesForAddress,
   analyzeCluster,
+  checkMintAuthority,
+  checkDeployerHoldings,
+  checkTopHolders,
+  checkBundledLaunch,
 } from '../services/helius';
 import { bulkCheckTokens } from '../services/dexscreener';
-import { calculateReputation } from '../services/reputation';
+import { calculateReputation, type RiskPenalties } from '../services/reputation';
 import { TTLCache } from '../services/cache';
-import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
+import type { DeployerScan, DeployerToken, FundingInfo, TokenRisks, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
 const scanCache = new TTLCache<DeployerScan>(1800); // 30 min TTL — saves Helius + DexScreener calls
@@ -25,15 +29,17 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     return;
   }
 
-  // Check cache — still attach fresh usage info
+  // Check cache — clone to avoid mutating shared object, attach fresh usage info
   const cached = scanCache.get(token_address);
   if (cached) {
-    cached.usage = {
-      scans_used: req.scansUsed || 0,
-      scans_limit: req.scansLimit || 10,
-      scans_remaining: req.scansRemaining || 0,
-    };
-    res.json(cached);
+    res.json({
+      ...cached,
+      usage: {
+        scans_used: req.scansUsed || 0,
+        scans_limit: req.scansLimit || 3,
+        scans_remaining: req.scansRemaining || 0,
+      },
+    });
     return;
   }
 
@@ -139,12 +145,47 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       }
     }
 
+    // Step 7.5: Token risk checks (best-effort, all 4 signals)
+    let tokenRisks: TokenRisks | null = null;
+    let riskPenalties: RiskPenalties | undefined;
+    let tokenRisksChecked = false;
+    try {
+      const mintInfo = await checkMintAuthority(token_address);
+      if (mintInfo) {
+        const [deployerHoldings, topHolders, bundled] = await Promise.all([
+          checkDeployerHoldings(deployerWallet, token_address, mintInfo.supply, mintInfo.decimals).catch(() => null),
+          checkTopHolders(token_address, mintInfo.supply).catch(() => null),
+          checkBundledLaunch(token_address, creationSig).catch(() => null),
+        ]);
+
+        tokenRisks = {
+          mint_authority: mintInfo.mintAuthority,
+          freeze_authority: mintInfo.freezeAuthority,
+          deployer_holdings_pct: deployerHoldings,
+          top_holder_pct: topHolders?.topHolderPct ?? null,
+          bundle_detected: bundled,
+        };
+
+        riskPenalties = {
+          mintAuthorityActive: mintInfo.mintAuthority !== null,
+          freezeAuthorityActive: mintInfo.freezeAuthority !== null,
+          topHolderAbove80: (topHolders?.topHolderPct ?? 0) > 80,
+          bundleDetected: bundled === true,
+        };
+
+        tokenRisksChecked = true;
+      }
+    } catch {
+      // Risk checks are best-effort — scan proceeds with base score only
+    }
+
     // Step 8: Calculate reputation score
     const { score, verdict } = calculateReputation({
       rugRate,
       tokenCount: totalTokens,
       avgLifespanDays: avgLifespan,
       clusterSize: funding.other_deployers_funded,
+      riskPenalties,
     });
 
     // Get deployer first/last seen from signatures
@@ -178,12 +219,13 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       tokens_unverified: unknownCount,
       deployer_method: deployerMethod,
       cluster_checked: clusterChecked,
+      token_risks_checked: tokenRisksChecked,
     };
 
     // Build usage info
     const usage: ScanUsage = {
       scans_used: req.scansUsed || 0,
-      scans_limit: req.scansLimit || 10,
+      scans_limit: req.scansLimit || 3,
       scans_remaining: req.scansRemaining || 0,
     };
 
@@ -206,6 +248,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       },
       funding,
       verdict,
+      token_risks: tokenRisks,
       evidence,
       confidence,
       usage,

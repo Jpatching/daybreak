@@ -2,16 +2,11 @@ import jwt from 'jsonwebtoken';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { TTLCache } from './cache';
+import { getUsage, incrementUsage as dbIncrement, isAdmin } from './db';
 
 const nonceCache = new TTLCache<string>(300); // 5min TTL for nonces
-const usageCache = new TTLCache<number>(86400); // 24hr window for rate limiting
 
 const MAX_SCANS_PER_DAY = 3;
-
-// Wallets exempt from rate limits (admin/dev wallets)
-const UNLIMITED_WALLETS = new Set([
-  '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2',
-]);
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -67,34 +62,34 @@ export function verifyToken(token: string): string | null {
   }
 }
 
-/** Check if a wallet has remaining rate limit */
+/** Check if a wallet has remaining rate limit (persisted in SQLite) */
 export function checkRateLimit(wallet: string): boolean {
-  if (UNLIMITED_WALLETS.has(wallet)) return true;
-  const usage = usageCache.get(wallet) || 0;
-  return usage < MAX_SCANS_PER_DAY;
+  if (isAdmin(wallet)) return true;
+  const usage = getUsage(wallet);
+  return usage.scansToday < MAX_SCANS_PER_DAY;
 }
 
 /** Check if a wallet has unlimited access */
 export function isUnlimited(wallet: string): boolean {
-  return UNLIMITED_WALLETS.has(wallet);
+  return isAdmin(wallet);
 }
 
-/** Increment scan usage for a wallet */
+/** Increment scan usage for a wallet (persisted in SQLite) */
 export function incrementUsage(wallet: string): void {
-  const current = usageCache.get(wallet) || 0;
-  usageCache.set(wallet, current + 1);
+  dbIncrement(wallet);
 }
 
 /** Get remaining scans for a wallet */
 export function getRemainingScans(wallet: string): number {
-  const usage = usageCache.get(wallet) || 0;
-  return Math.max(0, MAX_SCANS_PER_DAY - usage);
+  if (isAdmin(wallet)) return 999;
+  const usage = getUsage(wallet);
+  return Math.max(0, MAX_SCANS_PER_DAY - usage.scansToday);
 }
 
 /** Get current usage count for a wallet */
 export function getUsageCount(wallet: string): number {
-  return usageCache.get(wallet) || 0;
+  return getUsage(wallet).scansToday;
 }
 
-/** The max scans per hour constant */
+/** The max scans per day constant */
 export const SCANS_LIMIT = MAX_SCANS_PER_DAY;

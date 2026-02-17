@@ -46,6 +46,15 @@ export interface ScanConfidence {
   tokens_unverified: number;
   deployer_method: 'enhanced_api' | 'rpc_fallback';
   cluster_checked: boolean;
+  token_risks_checked: boolean;
+}
+
+export interface TokenRisks {
+  mint_authority: string | null;        // null = revoked (safe)
+  freeze_authority: string | null;      // null = revoked (safe)
+  deployer_holdings_pct: number | null; // 0-100
+  top_holder_pct: number | null;        // 0-100
+  bundle_detected: boolean | null;      // true = 3+ buys in creation slot
 }
 
 export interface ScanUsage {
@@ -59,6 +68,7 @@ export interface DeployerScan {
   deployer: DeployerInfo;
   funding: FundingInfo;
   verdict: Verdict;
+  token_risks: TokenRisks | null;
   evidence: ScanEvidence;
   confidence: ScanConfidence;
   usage: ScanUsage;

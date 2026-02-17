@@ -8,6 +8,14 @@ const NATIVE_MINT = 'So11111111111111111111111111111111111111112';
 // Cache metadata lookups for 30 minutes to save RPC calls on repeat deployers
 const metadataCache = new TTLCache<{ name: string; symbol: string }>(1800);
 
+// Cache mint authority data for 2 hours (authority revocation is permanent)
+const mintAuthorityCache = new TTLCache<{
+  mintAuthority: string | null;
+  freezeAuthority: string | null;
+  supply: string;
+  decimals: number;
+}>(7200);
+
 function getApiKey(): string {
   const key = process.env.HELIUS_API_KEY;
   if (!key) throw new Error('HELIUS_API_KEY not set');
@@ -464,6 +472,155 @@ export async function analyzeCluster(
     fundedWallets: Array.from(fundedWallets),
     deployerCount,
   };
+}
+
+/**
+ * Check mint/freeze authority status for a token.
+ * Returns null if the mint account can't be parsed.
+ */
+export async function checkMintAuthority(mintAddress: string): Promise<{
+  mintAuthority: string | null;
+  freezeAuthority: string | null;
+  supply: string;
+  decimals: number;
+} | null> {
+  const cached = mintAuthorityCache.get(mintAddress);
+  if (cached) return cached;
+
+  const result = await rpcCall('getAccountInfo', [mintAddress, { encoding: 'jsonParsed' }]);
+  const parsed = result?.value?.data?.parsed;
+  if (!parsed || parsed.type !== 'mint') return null;
+
+  const info = parsed.info;
+  const data = {
+    mintAuthority: info.mintAuthority || null,
+    freezeAuthority: info.freezeAuthority || null,
+    supply: info.supply as string,
+    decimals: info.decimals as number,
+  };
+  mintAuthorityCache.set(mintAddress, data);
+  return data;
+}
+
+/**
+ * Check how much of a token's supply the deployer still holds.
+ * Returns percentage (0-100) or null if lookup fails.
+ */
+export async function checkDeployerHoldings(
+  deployerWallet: string,
+  mintAddress: string,
+  totalSupply: string,
+  decimals: number
+): Promise<number | null> {
+  if (totalSupply === '0') return 0;
+
+  const result = await rpcCall('getTokenAccountsByOwner', [
+    deployerWallet,
+    { mint: mintAddress },
+    { encoding: 'jsonParsed' },
+  ]);
+
+  const accounts = result?.value || [];
+  let deployerBalance = BigInt(0);
+  for (const acc of accounts) {
+    const amount = acc.account?.data?.parsed?.info?.tokenAmount?.amount;
+    if (amount) deployerBalance += BigInt(amount);
+  }
+
+  const supply = BigInt(totalSupply);
+  if (supply === BigInt(0)) return 0;
+
+  // Calculate percentage: (balance * 10000 / supply) / 100 for 2 decimal places
+  const pct = Number((deployerBalance * BigInt(10000)) / supply) / 100;
+  return Math.round(pct * 100) / 100;
+}
+
+/**
+ * Get top holder concentration for a token.
+ * Returns top 1 and top 5 holder percentages.
+ */
+export async function checkTopHolders(
+  mintAddress: string,
+  totalSupply: string
+): Promise<{ topHolderPct: number; top5Pct: number } | null> {
+  if (totalSupply === '0') return null;
+
+  const result = await rpcCall('getTokenLargestAccounts', [mintAddress]);
+  const accounts = result?.value || [];
+  if (accounts.length === 0) return null;
+
+  const supply = BigInt(totalSupply);
+  let topHolderAmount = BigInt(0);
+  let top5Amount = BigInt(0);
+
+  for (let i = 0; i < accounts.length && i < 5; i++) {
+    const amount = BigInt(accounts[i].amount || '0');
+    if (i === 0) topHolderAmount = amount;
+    top5Amount += amount;
+  }
+
+  const topHolderPct = Number((topHolderAmount * BigInt(10000)) / supply) / 100;
+  const top5Pct = Number((top5Amount * BigInt(10000)) / supply) / 100;
+
+  return {
+    topHolderPct: Math.round(topHolderPct * 100) / 100,
+    top5Pct: Math.round(top5Pct * 100) / 100,
+  };
+}
+
+/**
+ * Detect bundled launches — 3+ unique wallets buying in the creation slot (±1).
+ * Returns true if bundled, false if not, null if detection couldn't run.
+ */
+export async function checkBundledLaunch(
+  mintAddress: string,
+  creationSig: string | null
+): Promise<boolean | null> {
+  if (!creationSig) return null;
+
+  try {
+    const txs = await getEnhancedTransactions(mintAddress, {
+      limit: 10,
+      sortOrder: 'asc',
+    });
+
+    if (!txs || txs.length === 0) return null;
+
+    // Find the creation slot
+    const creationTx = txs.find((tx: any) => tx.signature === creationSig);
+    const creationSlot = creationTx?.slot;
+    if (!creationSlot) return null;
+
+    // Find the deployer (feePayer of creation tx)
+    const deployer = creationTx.feePayer;
+
+    // Count unique non-deployer wallets that bought within ±1 slot
+    const earlyBuyers = new Set<string>();
+    for (const tx of txs) {
+      if (!tx.slot || Math.abs(tx.slot - creationSlot) > 1) continue;
+      if (tx.signature === creationSig) continue;
+
+      // Check token transfers for buy activity
+      const transfers = tx.tokenTransfers || [];
+      for (const t of transfers) {
+        if (t.mint === mintAddress && t.toUserAccount && t.toUserAccount !== deployer) {
+          earlyBuyers.add(t.toUserAccount);
+        }
+      }
+
+      // Also check feePayer if different from deployer
+      if (tx.feePayer && tx.feePayer !== deployer) {
+        const hasBuy = transfers.some(
+          (t: any) => t.mint === mintAddress && t.toUserAccount === tx.feePayer
+        );
+        if (hasBuy) earlyBuyers.add(tx.feePayer);
+      }
+    }
+
+    return earlyBuyers.size >= 3;
+  } catch {
+    return null;
+  }
 }
 
 /** Check if Helius API is reachable */

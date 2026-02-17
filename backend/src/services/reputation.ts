@@ -1,10 +1,18 @@
 import type { Verdict } from '../types';
 
+export interface RiskPenalties {
+  mintAuthorityActive: boolean;   // -10 points
+  freezeAuthorityActive: boolean; // -5 points
+  topHolderAbove80: boolean;      // -5 points
+  bundleDetected: boolean;        // -5 points
+}
+
 interface ReputationInput {
   rugRate: number;         // 0.0 - 1.0
   tokenCount: number;      // total tokens created
   avgLifespanDays: number; // average days tokens survived
   clusterSize: number;     // number of related deployers in funding cluster
+  riskPenalties?: RiskPenalties;
 }
 
 interface ReputationResult {
@@ -30,7 +38,16 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
   // Cluster size (20% weight) — larger cluster = more suspicious
   const clusterPenalty = Math.max(0, 20 - Math.min(20, input.clusterSize * 2));
 
-  const score = Math.round(rugComponent + tokenPenalty + lifespanScore + clusterPenalty);
+  let riskDeduction = 0;
+  if (input.riskPenalties) {
+    const p = input.riskPenalties;
+    if (p.mintAuthorityActive) riskDeduction += 10;
+    if (p.freezeAuthorityActive) riskDeduction += 5;
+    if (p.topHolderAbove80) riskDeduction += 5;
+    if (p.bundleDetected) riskDeduction += 5;
+  }
+
+  const score = Math.max(0, Math.round(rugComponent + tokenPenalty + lifespanScore + clusterPenalty) - riskDeduction);
 
   // Verdict based on composite score, with rug rate override
   let verdict: Verdict;
