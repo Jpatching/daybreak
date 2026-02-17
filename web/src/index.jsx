@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WalletProvider from './components/WalletProvider';
 import LandingPage from './pages/LandingPage';
 import ScannerPage from './pages/ScannerPage';
+import ProfilePage from './pages/ProfilePage';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -14,6 +15,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/" element={<LandingPage />} />
           <Route path="/scan" element={<ScannerPage />} />
           <Route path="/scan/:address" element={<ScannerPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </BrowserRouter>
     </WalletProvider>

@@ -234,6 +234,9 @@ export default function ScannerPage() {
               <ArrowLeft size={16} />
               Home
             </a>
+            <a href="/profile" className="text-slate-400 hover:text-white transition-colors text-sm">
+              Profile
+            </a>
             <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4 hover:!bg-amber-400" />
             <a
               href="https://github.com/Jpatching/daybreak"
@@ -255,6 +258,7 @@ export default function ScannerPage() {
           <div className="sm:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
             <div className="px-6 py-4 flex flex-col gap-3">
               <a href="/" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>Home</a>
+              <a href="/profile" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
               <div className="py-2">
                 <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4" />
               </div>
