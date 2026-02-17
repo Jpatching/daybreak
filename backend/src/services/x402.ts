@@ -1,16 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
+import { createHash } from 'crypto';
 
 // x402 Payment Protocol — Solana USDC server middleware
-// Spec: https://www.x402.org/
-// Facilitator: https://x402.coinbase.com
+// Self-verified Ed25519 signatures (no external facilitator needed)
+// Spec inspiration: https://www.x402.org/
 
-const COINBASE_FACILITATOR_URL = 'https://x402.coinbase.com';
 const USDC_DECIMALS = 6;
+const MAX_PAYMENT_AGE_SECONDS = 600; // 10 minutes
 
 export interface X402ServerConfig {
   payToWallet: string;
   network: 'solana' | 'solana-devnet';
-  facilitatorUrl?: string;
   priceUsd: number;
   description?: string;
 }
@@ -81,30 +83,122 @@ export function send402(res: Response, config: X402ServerConfig, resource: strin
     });
 }
 
-async function verifyWithFacilitator(payload: any, facilitatorUrl: string): Promise<boolean> {
+interface X402PaymentPayload {
+  paymentOption: {
+    scheme: string;
+    network: string;
+    asset: string;
+    maxAmountRequired: string;
+    payTo: string;
+    validUntil?: number;
+  };
+  signature: string;  // base58 Ed25519 signature
+  payer: string;      // base58 public key
+  nonce: string;
+  timestamp: number;
+}
+
+/**
+ * Verify x402 payment payload by checking Ed25519 signature server-side.
+ * 1. Reconstruct the canonical message from the payment option fields
+ * 2. SHA-256 hash it
+ * 3. Verify Ed25519 signature against the claimed payer's public key
+ * 4. Check timestamp freshness and payment option matches our config
+ *
+ * Returns the verified payer public key (base58) or null if invalid.
+ */
+function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerConfig): string | null {
   try {
-    const response = await fetch(`${facilitatorUrl}/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const { paymentOption, signature, payer, nonce, timestamp } = payload;
+
+    // Validate required fields
+    if (!paymentOption || !signature || !payer || !nonce || !timestamp) {
+      console.error('[x402] Missing required fields in payment payload');
+      return null;
+    }
+
+    // Check timestamp freshness (reject stale payments)
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - timestamp) > MAX_PAYMENT_AGE_SECONDS) {
+      console.error(`[x402] Payment timestamp too old/future: ${timestamp} vs ${now}`);
+      return null;
+    }
+
+    // Verify payment option matches our config
+    if (paymentOption.payTo !== config.payToWallet) {
+      console.error(`[x402] payTo mismatch: ${paymentOption.payTo} !== ${config.payToWallet}`);
+      return null;
+    }
+
+    const expectedAmount = usdToLamports(config.priceUsd);
+    if (BigInt(paymentOption.maxAmountRequired) < BigInt(expectedAmount)) {
+      console.error(`[x402] Amount too low: ${paymentOption.maxAmountRequired} < ${expectedAmount}`);
+      return null;
+    }
+
+    // Reconstruct the canonical message (must match client-side construction)
+    const message = JSON.stringify({
+      scheme: paymentOption.scheme,
+      network: paymentOption.network,
+      asset: paymentOption.asset,
+      amount: paymentOption.maxAmountRequired,
+      payTo: paymentOption.payTo,
+      nonce,
+      timestamp,
+      validUntil: paymentOption.validUntil ?? timestamp + 300,
     });
-    if (!response.ok) return false;
-    const result = await response.json() as { valid?: boolean; settled?: boolean };
-    return result.valid === true && (result.settled === true || result.settled === undefined);
+
+    // SHA-256 hash of the message
+    const messageBytes = new TextEncoder().encode(message);
+    const messageHash = createHash('sha256').update(messageBytes).digest();
+
+    // Decode payer public key and signature from base58
+    let publicKeyBytes: Uint8Array;
+    let signatureBytes: Uint8Array;
+    try {
+      publicKeyBytes = bs58.decode(payer);
+      signatureBytes = bs58.decode(signature);
+    } catch {
+      console.error('[x402] Failed to decode base58 payer/signature');
+      return null;
+    }
+
+    if (publicKeyBytes.length !== 32) {
+      console.error(`[x402] Invalid public key length: ${publicKeyBytes.length}`);
+      return null;
+    }
+
+    if (signatureBytes.length !== 64) {
+      console.error(`[x402] Invalid signature length: ${signatureBytes.length}`);
+      return null;
+    }
+
+    // Verify Ed25519 signature
+    const valid = nacl.sign.detached.verify(
+      new Uint8Array(messageHash),
+      signatureBytes,
+      publicKeyBytes,
+    );
+
+    if (!valid) {
+      console.error('[x402] Ed25519 signature verification failed');
+      return null;
+    }
+
+    // Signature verified — return the proven payer identity
+    return payer;
   } catch (err) {
-    console.error('[x402] Facilitator verification error:', err);
-    return false;
+    console.error('[x402] Signature verification error:', err);
+    return null;
   }
 }
 
 /**
  * x402 middleware for paid endpoints (agents/bots, no JWT required).
- * If X-PAYMENT header present → verify with Coinbase facilitator → allow.
+ * If X-PAYMENT header present → verify Ed25519 signature server-side → allow.
  * Otherwise → 402 with USDC payment instructions.
  */
 export function createX402Middleware(config: X402ServerConfig) {
-  const facilitatorUrl = config.facilitatorUrl || COINBASE_FACILITATOR_URL;
-
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const paymentHeader = req.headers['x-payment'] as string | undefined;
 
@@ -120,34 +214,37 @@ export function createX402Middleware(config: X402ServerConfig) {
       return;
     }
 
+    let payload: X402PaymentPayload;
     try {
-      const payload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
-
-      const verified = await verifyWithFacilitator(payload, facilitatorUrl);
-      if (!verified) {
-        res.status(402).json({ error: 'Payment verification failed. Please try again.' });
-        return;
-      }
-
-      // Track payment stats
-      const endpoint = req.baseUrl + req.path;
-      stats.totalPayments++;
-      stats.totalRevenue += config.priceUsd;
-      if (!stats.byEndpoint[endpoint]) {
-        stats.byEndpoint[endpoint] = { count: 0, revenue: 0 };
-      }
-      stats.byEndpoint[endpoint].count++;
-      stats.byEndpoint[endpoint].revenue += config.priceUsd;
-
-      console.log(`[x402] Payment received: ${endpoint} from ${payload.payer || 'unknown'} — $${config.priceUsd}`);
-
-      // Attach payer info for downstream usage tracking
-      req.wallet = payload.payer || 'x402-anonymous';
-
-      next();
+      payload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
     } catch (err) {
       console.error('[x402] Payment parsing error:', err);
-      res.status(400).json({ error: 'Invalid payment payload' });
+      res.status(400).json({ error: 'Invalid payment payload — could not decode' });
+      return;
     }
+
+    // Verify Ed25519 signature server-side (proves wallet ownership)
+    const verifiedPayer = verifyPaymentSignature(payload, config);
+    if (!verifiedPayer) {
+      res.status(402).json({ error: 'Payment verification failed. Invalid signature or stale payment.' });
+      return;
+    }
+
+    // Track payment stats
+    const endpoint = req.baseUrl + req.path;
+    stats.totalPayments++;
+    stats.totalRevenue += config.priceUsd;
+    if (!stats.byEndpoint[endpoint]) {
+      stats.byEndpoint[endpoint] = { count: 0, revenue: 0 };
+    }
+    stats.byEndpoint[endpoint].count++;
+    stats.byEndpoint[endpoint].revenue += config.priceUsd;
+
+    console.log(`[x402] Payment verified: ${endpoint} from ${verifiedPayer} — $${config.priceUsd}`);
+
+    // Attach cryptographically verified payer identity
+    req.wallet = verifiedPayer;
+
+    next();
   };
 }
