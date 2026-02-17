@@ -7,3 +7,8 @@ target/
 .vscode/
 .idea/
 deployment.json
+*:Zone.Identifier
+data.db
+*.log
+backend/node_modules/
+backend/dist/

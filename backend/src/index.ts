@@ -1,0 +1,52 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env from repo root
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+import express from 'express';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+
+import healthRouter from './routes/health';
+import deployerRouter from './routes/deployer';
+import walletRouter from './routes/wallet';
+
+const app = express();
+const PORT = parseInt(process.env.PORT || '3001', 10);
+
+// CORS — allow Vercel frontend and local dev
+app.use(cors({
+  origin: [
+    'https://daybreakscan.com',
+    'https://www.daybreakscan.com',
+    /\.vercel\.app$/,
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ],
+  methods: ['GET'],
+}));
+
+// Rate limiting: 30 req/min per IP
+app.use('/api/', rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a minute.' },
+}));
+
+// Routes
+app.use('/api/v1/health', healthRouter);
+app.use('/api/v1/deployer', deployerRouter);
+app.use('/api/v1/wallet', walletRouter);
+
+// 404 catch-all
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Daybreak API running on port ${PORT}`);
+  console.log(`Health: http://localhost:${PORT}/api/v1/health`);
+});
