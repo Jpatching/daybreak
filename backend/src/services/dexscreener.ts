@@ -33,12 +33,16 @@ export async function checkTokenStatus(mintAddress: string): Promise<TokenStatus
     const totalVolume24h = pairs.reduce((sum, p) => sum + (p.volume?.h24 || 0), 0);
     const bestPair = pairs[0];
 
-    // A token is alive if it has meaningful liquidity AND recent activity
+    // A token is alive if it has meaningful liquidity OR active trading volume
+    // Pump.fun bonding curve tokens have $0 liquidity on DexScreener but
+    // still trade actively — volume alone proves the token is alive
     const ageHours = bestPair.pairCreatedAt
       ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
       : Infinity;
-    const isAlive = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD &&
-      (totalVolume24h > 0 || ageHours < 24);
+    const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
+    const hasVolume = totalVolume24h > 0;
+    const isNew = ageHours < 24;
+    const isAlive = hasLiquidity || hasVolume || isNew;
 
     return {
       alive: isAlive,
@@ -112,8 +116,10 @@ export async function bulkCheckTokens(
         const ageHours = bestPair.pairCreatedAt
           ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
           : Infinity;
-        const isAlive = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD &&
-          (totalVolume24h > 0 || ageHours < 24);
+        const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
+        const hasVolume = totalVolume24h > 0;
+        const isNew = ageHours < 24;
+        const isAlive = hasLiquidity || hasVolume || isNew;
 
         const status = {
           alive: isAlive,
