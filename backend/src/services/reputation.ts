@@ -51,7 +51,7 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
 
   // Verdict based on composite score, with rug rate override
   let verdict: Verdict;
-  if (input.rugRate > 0.8 || score < 30) {
+  if ((input.rugRate > 0.8 && input.tokenCount >= 3) || score < 30) {
     verdict = 'SERIAL_RUGGER';
   } else if (score < 60) {
     verdict = 'SUSPICIOUS';

@@ -69,8 +69,8 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
       if (!isAlive) deadCount++;
 
-      // Only count lifespan for alive tokens
-      if (isAlive && status.pairCreatedAt) {
+      // Count lifespan for ALL tokens with known creation date
+      if (status.pairCreatedAt) {
         const created = new Date(status.pairCreatedAt).getTime();
         const days = (Date.now() - created) / (1000 * 60 * 60 * 24);
         totalLifespanDays += days;

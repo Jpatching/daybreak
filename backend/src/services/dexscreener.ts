@@ -85,7 +85,13 @@ export async function bulkCheckTokens(
     try {
       const res = await fetch(`${DEXSCREENER_API}/tokens/${joined}`);
       if (!res.ok) {
-        // Don't cache HTTP errors — leave tokens out of results for retry
+        // Mark failed-batch tokens as dead (conservative) — a failed lookup
+        // is more likely a dead/obscure token than a thriving one
+        for (const addr of batch) {
+          const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
+          results.set(addr, dead);
+          // Don't cache — allow retry on next request
+        }
         continue;
       }
 
