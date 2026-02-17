@@ -79,3 +79,11 @@ export function getRemainingScans(wallet: string): number {
   const usage = usageCache.get(wallet) || 0;
   return Math.max(0, MAX_SCANS_PER_HOUR - usage);
 }
+
+/** Get current usage count for a wallet */
+export function getUsageCount(wallet: string): number {
+  return usageCache.get(wallet) || 0;
+}
+
+/** The max scans per hour constant */
+export const SCANS_LIMIT = MAX_SCANS_PER_HOUR;

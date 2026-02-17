@@ -11,12 +11,14 @@ export interface DeployerToken {
   alive: boolean;
   liquidity: number;
   created_at: string | null;
+  dexscreener_url: string;
 }
 
 export interface DeployerInfo {
   wallet: string;
   tokens_created: number;
   tokens_dead: number;
+  tokens_unverified: number;
   rug_rate: number;
   reputation_score: number;
   first_seen: string | null;
@@ -33,11 +35,33 @@ export interface FundingInfo {
 
 export type Verdict = 'CLEAN' | 'SUSPICIOUS' | 'SERIAL_RUGGER';
 
+export interface ScanEvidence {
+  deployer_url: string;
+  funding_source_url: string | null;
+  creation_tx_url: string | null;
+}
+
+export interface ScanConfidence {
+  tokens_verified: number;
+  tokens_unverified: number;
+  deployer_method: 'enhanced_api' | 'rpc_fallback';
+  cluster_checked: boolean;
+}
+
+export interface ScanUsage {
+  scans_used: number;
+  scans_limit: number;
+  scans_remaining: number;
+}
+
 export interface DeployerScan {
   token: TokenInfo;
   deployer: DeployerInfo;
   funding: FundingInfo;
   verdict: Verdict;
+  evidence: ScanEvidence;
+  confidence: ScanConfidence;
+  usage: ScanUsage;
   scanned_at: string;
 }
 
@@ -64,4 +88,10 @@ export interface DexScreenerPair {
   };
   fdv?: number;
   pairCreatedAt?: number;
+}
+
+export interface FindDeployerResult {
+  wallet: string;
+  creationSig: string | null;
+  method: 'enhanced_api' | 'rpc_fallback';
 }

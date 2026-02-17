@@ -1,5 +1,6 @@
 import { sanitizeString } from '../utils/sanitize';
 import { TTLCache } from './cache';
+import type { FindDeployerResult } from '../types';
 
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const NATIVE_MINT = 'So11111111111111111111111111111111111111112';
@@ -78,10 +79,11 @@ async function getEnhancedTransactions(
 
 /**
  * Find the deployer/creator of a Pump.fun token.
+ * Returns wallet, creation signature, and detection method.
  * Strategy 1: Enhanced API sort-order=asc (1-2 calls)
  * Strategy 2: RPC pagination fallback
  */
-export async function findDeployer(mintAddress: string): Promise<string | null> {
+export async function findDeployer(mintAddress: string): Promise<FindDeployerResult | null> {
   // Strategy 1: Enhanced API — get oldest transactions for this token (1 call)
   try {
     const txs = await getEnhancedTransactions(mintAddress, {
@@ -91,7 +93,7 @@ export async function findDeployer(mintAddress: string): Promise<string | null> 
 
     for (const tx of txs) {
       if (tx.type === 'CREATE' && tx.source === 'PUMP_FUN' && tx.feePayer) {
-        return tx.feePayer;
+        return { wallet: tx.feePayer, creationSig: tx.signature || null, method: 'enhanced_api' };
       }
     }
 
@@ -109,8 +111,7 @@ export async function findDeployer(mintAddress: string): Promise<string | null> 
           }
         }
         if (hasPumpFun && hasInitMint) {
-          // Prefer feePayer — on Pump.fun the deployer pays to create
-          return txs[0].feePayer;
+          return { wallet: txs[0].feePayer, creationSig: txs[0].signature || null, method: 'enhanced_api' };
         }
       }
     }
@@ -141,16 +142,19 @@ export async function findDeployer(mintAddress: string): Promise<string | null> 
   for (const group of inner) {
     for (const ix of (group.instructions || [])) {
       if (ix.parsed?.type === 'initializeMint2' && ix.parsed?.info?.mint === mintAddress) {
-        // The feePayer of this tx is the deployer
         const feePayer = accounts.find((k: any) => k.signer);
-        return feePayer?.pubkey || null;
+        if (feePayer?.pubkey) {
+          return { wallet: feePayer.pubkey, creationSig: oldestSig.signature, method: 'rpc_fallback' };
+        }
       }
     }
   }
 
   // Fallback: return first signer if no initializeMint2 found
   const signers = accounts.filter((k: any) => k.signer);
-  if (signers.length > 0) return signers[0].pubkey;
+  if (signers.length > 0) {
+    return { wallet: signers[0].pubkey, creationSig: oldestSig.signature, method: 'rpc_fallback' };
+  }
 
   return null;
 }
@@ -195,13 +199,20 @@ export async function findDeployerTokens(deployerWallet: string): Promise<string
           (ix.innerInstructions || []).some((inner: any) => inner.programId === PUMP_FUN_PROGRAM)
       );
 
-      // For non-CREATE txs (swaps, sells), skip entirely — we only want creations
-      if (!isPumpCreate && !hasPumpInstruction) continue;
-      // If it has Pump.fun instructions but isn't a CREATE, skip
-      // (this filters out buy/sell interactions with pump tokens)
-      if (!isPumpCreate && hasPumpInstruction) {
-        // Only allow if this looks like a token creation (has TOKEN_MINT or CREATE type)
-        if (tx.type !== 'CREATE' && tx.type !== 'TOKEN_MINT') continue;
+      if (isPumpCreate) {
+        // Confirmed Pump.fun creation — extract mints below
+      } else if (hasPumpInstruction && (tx.type === 'UNKNOWN' || tx.type === 'COMPRESSED_NFT_MINT')) {
+        // Newer Pump.fun versions may emit non-standard types;
+        // check for initializeMint2 in instructions to confirm creation
+        const hasInitMint = (tx.instructions || []).some(
+          (ix: any) =>
+            ix.parsed?.type === 'initializeMint2' ||
+            (ix.innerInstructions || []).some((inner: any) => inner.parsed?.type === 'initializeMint2')
+        );
+        if (!hasInitMint) continue;
+      } else {
+        // Not a creation tx — skip buys, sells, etc.
+        continue;
       }
 
       // Extract mints from this creation tx
@@ -428,14 +439,16 @@ export async function analyzeCluster(
     const results = await Promise.all(
       batch.map(async (wallet) => {
         try {
-          // Quick check: look for any Pump.fun CREATE tx in first 20 txs
+          // Quick check: look for Pump.fun CREATE tx in first 20 txs
+          // Only count actual deployers (CREATE+PUMP_FUN), not buyers/sellers
           const txs = await getEnhancedTransactions(wallet, { limit: 20 });
-          const hasPump = txs.some(
+          const isDeployer = txs.some(
             (tx: any) =>
-              (tx.source === 'PUMP_FUN') ||
-              (tx.instructions || []).some((ix: any) => ix.programId === PUMP_FUN_PROGRAM)
+              tx.feePayer === wallet &&
+              tx.source === 'PUMP_FUN' &&
+              (tx.type === 'CREATE' || tx.type === 'TOKEN_MINT')
           );
-          return hasPump;
+          return isDeployer;
         } catch {
           return false;
         }

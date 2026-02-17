@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, checkRateLimit, incrementUsage, getRemainingScans } from '../services/auth';
+import { verifyToken, checkRateLimit, incrementUsage, getRemainingScans, getUsageCount, SCANS_LIMIT } from '../services/auth';
 
-// Extend Express Request to include wallet
+// Extend Express Request to include wallet and usage info
 declare global {
   namespace Express {
     interface Request {
       wallet?: string;
+      scansUsed?: number;
+      scansRemaining?: number;
+      scansLimit?: number;
     }
   }
 }
@@ -37,5 +40,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   incrementUsage(wallet);
   req.wallet = wallet;
+  req.scansUsed = getUsageCount(wallet);
+  req.scansRemaining = SCANS_LIMIT - req.scansUsed;
+  req.scansLimit = SCANS_LIMIT;
   next();
 }

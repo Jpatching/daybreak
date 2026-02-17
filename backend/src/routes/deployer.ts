@@ -12,7 +12,7 @@ import {
 import { bulkCheckTokens } from '../services/dexscreener';
 import { calculateReputation } from '../services/reputation';
 import { TTLCache } from '../services/cache';
-import type { DeployerScan, DeployerToken, FundingInfo } from '../types';
+import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
 const scanCache = new TTLCache<DeployerScan>(300); // 5 min TTL
@@ -25,9 +25,14 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     return;
   }
 
-  // Check cache
+  // Check cache — still attach fresh usage info
   const cached = scanCache.get(token_address);
   if (cached) {
+    cached.usage = {
+      scans_used: req.scansUsed || 0,
+      scans_limit: req.scansLimit || 10,
+      scans_remaining: req.scansRemaining || 0,
+    };
     res.json(cached);
     return;
   }
@@ -36,12 +41,13 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     // Step 1: Get token metadata
     const tokenMeta = await getTokenMetadata(token_address);
 
-    // Step 2: Find deployer wallet
-    const deployerWallet = await findDeployer(token_address);
-    if (!deployerWallet) {
+    // Step 2: Find deployer wallet (now returns wallet + creationSig + method)
+    const deployerResult = await findDeployer(token_address);
+    if (!deployerResult) {
       res.status(404).json({ error: 'Could not find deployer for this token' });
       return;
     }
+    const { wallet: deployerWallet, creationSig, method: deployerMethod } = deployerResult;
 
     // Step 3: Find all tokens this deployer created via Pump.fun
     const deployerTokenMints = await findDeployerTokens(deployerWallet);
@@ -54,36 +60,39 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     // Step 4: Bulk check alive/dead status via DexScreener
     const tokenStatuses = await bulkCheckTokens(deployerTokenMints);
 
-    // Step 5: Build token list
+    // Step 5: Build token list — drop unknown tokens entirely
     const tokens: DeployerToken[] = [];
     let deadCount = 0;
     let totalLifespanDays = 0;
     let tokensWithLifespan = 0;
+    let unknownCount = 0;
 
-    // Fetch metadata for tokens not found on DexScreener (via Helius DAS)
-    const metadataPromises = deployerTokenMints.map(async (mint) => {
+    // Fetch metadata for verified tokens
+    const verifiedMints = deployerTokenMints.filter(mint => tokenStatuses.has(mint));
+    const unverifiedMints = deployerTokenMints.filter(mint => !tokenStatuses.has(mint));
+    unknownCount = unverifiedMints.length;
+
+    const metadataPromises = verifiedMints.map(async (mint) => {
       if (mint === token_address) return { mint, ...tokenMeta };
       const status = tokenStatuses.get(mint);
       if (status?.name && status.name !== 'Unknown') return { mint, name: status.name, symbol: status.symbol || '???' };
-      // Fallback to on-chain metadata
       const onChain = await getTokenMetadata(mint);
       return { mint, ...onChain };
     });
     const allMetadata = await Promise.all(metadataPromises);
     const metaMap = new Map(allMetadata.map(m => [m.mint, { name: m.name, symbol: m.symbol }]));
 
-    for (const mint of deployerTokenMints) {
-      const status = tokenStatuses.get(mint);
+    for (const mint of verifiedMints) {
+      const status = tokenStatuses.get(mint)!;
       const meta = metaMap.get(mint) || { name: 'Unknown', symbol: '???' };
+      const isAlive = status.alive || false;
 
-      const isAlive = status?.alive || false;
       if (!isAlive) deadCount++;
 
-      // Estimate lifespan from pair creation date
-      if (status?.pairCreatedAt) {
+      // Only count lifespan for alive tokens
+      if (isAlive && status.pairCreatedAt) {
         const created = new Date(status.pairCreatedAt).getTime();
-        const now = Date.now();
-        const days = (now - created) / (1000 * 60 * 60 * 24);
+        const days = (Date.now() - created) / (1000 * 60 * 60 * 24);
         totalLifespanDays += days;
         tokensWithLifespan++;
       }
@@ -93,13 +102,16 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         name: sanitizeString(meta.name),
         symbol: sanitizeString(meta.symbol),
         alive: isAlive,
-        liquidity: status?.liquidity || 0,
-        created_at: status?.pairCreatedAt || null,
+        liquidity: status.liquidity || 0,
+        created_at: status.pairCreatedAt || null,
+        dexscreener_url: `https://dexscreener.com/solana/${mint}`,
       });
     }
 
     const totalTokens = deployerTokenMints.length;
-    const rugRate = totalTokens > 0 ? deadCount / totalTokens : 0;
+    const verifiedCount = verifiedMints.length;
+    // Rug rate based ONLY on verified tokens
+    const rugRate = verifiedCount > 0 ? deadCount / verifiedCount : 0;
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
     // Step 6: Funding trace (1 hop)
@@ -111,15 +123,15 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       cluster_total_dead: deadCount,
     };
 
-    // Step 7: Cluster analysis — parse funder's outgoing transfers,
-    // find other wallets it funded, check if they're Pump.fun deployers
+    // Step 7: Cluster analysis
+    let clusterChecked = false;
     if (fundingSource) {
       try {
         const cluster = await analyzeCluster(fundingSource, deployerWallet);
         funding.other_deployers_funded = cluster.deployerCount;
-        // Cluster totals reflect only the scanned deployer's tokens
         funding.cluster_total_tokens = totalTokens;
         funding.cluster_total_dead = deadCount;
+        clusterChecked = true;
       } catch {
         // Cluster analysis is best-effort
       }
@@ -141,7 +153,6 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       if (deployerSigs.length > 0 && deployerSigs[0].blockTime) {
         lastSeen = new Date(deployerSigs[0].blockTime * 1000).toISOString();
       }
-      // First seen approximation from oldest token creation
       const oldestToken = tokens.reduce((oldest, t) => {
         if (!t.created_at) return oldest;
         if (!oldest) return t.created_at;
@@ -151,6 +162,28 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     } catch {
       // best-effort
     }
+
+    // Build evidence links
+    const evidence: ScanEvidence = {
+      deployer_url: `https://solscan.io/account/${deployerWallet}`,
+      funding_source_url: fundingSource ? `https://solscan.io/account/${fundingSource}` : null,
+      creation_tx_url: creationSig ? `https://solscan.io/tx/${creationSig}` : null,
+    };
+
+    // Build confidence flags
+    const confidence: ScanConfidence = {
+      tokens_verified: verifiedCount,
+      tokens_unverified: unknownCount,
+      deployer_method: deployerMethod,
+      cluster_checked: clusterChecked,
+    };
+
+    // Build usage info
+    const usage: ScanUsage = {
+      scans_used: req.scansUsed || 0,
+      scans_limit: req.scansLimit || 10,
+      scans_remaining: req.scansRemaining || 0,
+    };
 
     const result: DeployerScan = {
       token: {
@@ -162,6 +195,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         wallet: deployerWallet,
         tokens_created: totalTokens,
         tokens_dead: deadCount,
+        tokens_unverified: unknownCount,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         reputation_score: score,
         first_seen: firstSeen,
@@ -170,6 +204,9 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       },
       funding,
       verdict,
+      evidence,
+      confidence,
+      usage,
       scanned_at: new Date().toISOString(),
     };
 
