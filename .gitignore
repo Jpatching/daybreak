@@ -12,3 +12,5 @@ data.db
 *.log
 backend/node_modules/
 backend/dist/
+web/node_modules/
+web/dist/
