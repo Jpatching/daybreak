@@ -26,15 +26,20 @@ db.exec(`
   )
 `);
 
-// Seed admin wallet
-const ADMIN_WALLET = '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2';
+// Seed admin wallets
+const ADMIN_WALLETS = [
+  '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2',
+  'DW2DQdED8ABpG98YCxf2UBgeJiw3ZaELJND1UsNEXkWq',
+];
 
 const upsertAdmin = db.prepare(`
   INSERT INTO wallet_usage (wallet, scans_today, last_reset, total_scans, is_admin)
   VALUES (?, 0, date('now'), 0, 1)
   ON CONFLICT(wallet) DO UPDATE SET is_admin = 1
 `);
-upsertAdmin.run(ADMIN_WALLET);
+for (const wallet of ADMIN_WALLETS) {
+  upsertAdmin.run(wallet);
+}
 
 // Prepared statements
 const getUsageStmt = db.prepare(`

@@ -21,6 +21,21 @@ import './services/db';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// Bot API key middleware — bypasses JWT auth + rate limits for trusted bots
+const BOT_API_KEY = process.env.BOT_API_KEY;
+const requireBotKey: express.RequestHandler = (req, res, next) => {
+  if (!BOT_API_KEY) {
+    res.status(503).json({ error: 'Bot API key not configured' });
+    return;
+  }
+  const key = req.headers['x-bot-key'] as string | undefined;
+  if (!key || key !== BOT_API_KEY) {
+    res.status(401).json({ error: 'Invalid or missing X-Bot-Key header' });
+    return;
+  }
+  next();
+};
+
 // Trust Nginx reverse proxy (required for express-rate-limit + X-Forwarded-For)
 app.set('trust proxy', 1);
 
@@ -66,6 +81,10 @@ const x402Config: X402ServerConfig = {
 
 const x402Middleware = createX402Middleware(x402Config);
 
+// Bot tier: API key auth, no rate limits (trusted bots only)
+app.use('/api/v1/bot/deployer', requireBotKey, deployerRouter);
+app.use('/api/v1/bot/wallet', requireBotKey, walletRouter);
+
 // Paid tier: x402 paywall (agents/bots, no JWT needed)
 app.use('/api/v1/paid/deployer', x402Middleware, deployerRouter);
 app.use('/api/v1/paid/wallet', x402Middleware, walletRouter);
@@ -91,6 +110,7 @@ app.use((_req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Daybreak API running on port ${PORT}`);
   console.log(`Health: http://localhost:${PORT}/api/v1/health`);
+  console.log(`Bot endpoints: /api/v1/bot/deployer/:token, /api/v1/bot/wallet/:wallet`);
   console.log(`x402 paid endpoints: /api/v1/paid/deployer/:token, /api/v1/paid/wallet/:wallet`);
   console.log(`x402 stats: http://localhost:${PORT}/api/v1/x402/stats`);
 });
