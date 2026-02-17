@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { generateNonce, verifyWalletSignature, issueToken } from '../services/auth';
+import { generateNonce, verifyWalletSignature, issueToken, verifyToken, getUsageCount, getRemainingScans, SCANS_LIMIT } from '../services/auth';
 import { isValidSolanaAddress } from '../utils/validate';
 
 const router = Router();
@@ -34,6 +34,28 @@ router.post('/verify', (req, res) => {
 
   const token = issueToken(wallet);
   res.json({ token });
+});
+
+/** GET /api/v1/auth/usage — check scan usage (requires Bearer token) */
+router.get('/usage', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  const wallet = verifyToken(token);
+  if (!wallet) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const scansUsed = getUsageCount(wallet);
+  const scansRemaining = getRemainingScans(wallet);
+  res.json({
+    scans_used: scansUsed,
+    scans_limit: SCANS_LIMIT,
+    scans_remaining: scansRemaining,
+  });
 });
 
 export default router;
