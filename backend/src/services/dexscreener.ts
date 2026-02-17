@@ -1,7 +1,11 @@
 import type { DexScreenerPair } from '../types';
+import { TTLCache } from './cache';
 
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex';
 const ALIVE_LIQUIDITY_THRESHOLD = 100; // USD
+
+// Cache token status for 1 hour to avoid redundant DexScreener calls
+const dexCache = new TTLCache<TokenStatus>(3600);
 
 interface TokenStatus {
   alive: boolean;
@@ -56,10 +60,22 @@ export async function bulkCheckTokens(
   mintAddresses: string[]
 ): Promise<Map<string, TokenStatus>> {
   const results = new Map<string, TokenStatus>();
+
+  // Check cache first, collect uncached mints
+  const uncached: string[] = [];
+  for (const addr of mintAddresses) {
+    const cached = dexCache.get(addr);
+    if (cached) {
+      results.set(addr, cached);
+    } else {
+      uncached.push(addr);
+    }
+  }
+
   const batchSize = 30;
 
-  for (let i = 0; i < mintAddresses.length; i += batchSize) {
-    const batch = mintAddresses.slice(i, i + batchSize);
+  for (let i = 0; i < uncached.length; i += batchSize) {
+    const batch = uncached.slice(i, i + batchSize);
     const joined = batch.join(',');
 
     try {
@@ -84,7 +100,9 @@ export async function bulkCheckTokens(
       for (const addr of batch) {
         const tokenPairs = pairsByToken.get(addr) || [];
         if (tokenPairs.length === 0) {
-          results.set(addr, { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null });
+          const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
+          results.set(addr, dead);
+          dexCache.set(addr, dead);
           continue;
         }
         const totalLiquidity = tokenPairs.reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0);
@@ -97,7 +115,7 @@ export async function bulkCheckTokens(
         const isAlive = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD &&
           (totalVolume24h > 0 || ageHours < 24);
 
-        results.set(addr, {
+        const status = {
           alive: isAlive,
           liquidity: totalLiquidity,
           volume24h: totalVolume24h,
@@ -106,14 +124,20 @@ export async function bulkCheckTokens(
           pairCreatedAt: bestPair.pairCreatedAt
             ? new Date(bestPair.pairCreatedAt).toISOString()
             : null,
-        });
+        };
+        results.set(addr, status);
+        dexCache.set(addr, status);
       }
     } catch {
-      batch.forEach(addr => results.set(addr, { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null }));
+      batch.forEach(addr => {
+        const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
+        results.set(addr, dead);
+        dexCache.set(addr, dead);
+      });
     }
 
     // Small delay between batches to avoid rate limiting
-    if (i + batchSize < mintAddresses.length) {
+    if (i + batchSize < uncached.length) {
       await new Promise(r => setTimeout(r, 200));
     }
   }

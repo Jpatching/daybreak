@@ -1,7 +1,11 @@
 import { sanitizeString } from '../utils/sanitize';
+import { TTLCache } from './cache';
 
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const NATIVE_MINT = 'So11111111111111111111111111111111111111112';
+
+// Cache metadata lookups for 30 minutes to save RPC calls on repeat deployers
+const metadataCache = new TTLCache<{ name: string; symbol: string }>(1800);
 
 function getApiKey(): string {
   const key = process.env.HELIUS_API_KEY;
@@ -285,6 +289,9 @@ async function findDeployerTokensRpc(deployerWallet: string): Promise<string[]> 
 
 /** Get token metadata (name, symbol) from on-chain data via Helius DAS API */
 export async function getTokenMetadata(mintAddress: string): Promise<{ name: string; symbol: string }> {
+  const cached = metadataCache.get(mintAddress);
+  if (cached) return cached;
+
   try {
     const res = await fetch(getRpcUrl(), {
       method: 'POST',
@@ -298,15 +305,19 @@ export async function getTokenMetadata(mintAddress: string): Promise<{ name: str
     });
     const json: any = await res.json();
     if (json.result?.content?.metadata) {
-      return {
+      const result = {
         name: sanitizeString(json.result.content.metadata.name || 'Unknown'),
         symbol: sanitizeString(json.result.content.metadata.symbol || '???'),
       };
+      metadataCache.set(mintAddress, result);
+      return result;
     }
   } catch {
     // fallback below
   }
-  return { name: 'Unknown', symbol: '???' };
+  const fallback = { name: 'Unknown', symbol: '???' };
+  metadataCache.set(mintAddress, fallback);
+  return fallback;
 }
 
 /** Find the funding source of a wallet (earliest incoming SOL transfer) */

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import SunriseShader from '../components/SunriseShader';
 import {
   Shield,
   Search,
-  GitBranch,
   Layers,
   Globe,
   Lock,
@@ -12,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Terminal,
-  FileText,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -20,26 +20,22 @@ import {
   Activity,
   Target,
   Eye,
-  Settings,
   Bot,
   ArrowRight,
   Github,
-  Code,
   Database,
   Cpu,
   Rocket,
-  Server,
   Scale,
   Menu,
   X,
+  Skull,
+  TrendingUp,
+  Users,
+  Wallet,
+  Link2,
 } from 'lucide-react';
-import {
-  SiEthereum,
-  SiPolygon,
-  SiSolana,
-  SiOptimism,
-  SiCoinbase,
-} from '@icons-pack/react-simple-icons';
+import { SiSolana } from '@icons-pack/react-simple-icons';
 
 // ---------- Branding SVG components ----------
 
@@ -54,67 +50,26 @@ function DaybreakLogo({ size = 28 }) {
   );
 }
 
-function WormholeIcon({ size = 28 }) {
+function PumpFunIcon({ size = 28 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40">
       <rect width="40" height="40" rx="20" fill="#0d1117" />
-      <circle cx="20" cy="20" r="14" fill="none" stroke="white" strokeWidth="1.5" opacity="0.25" />
-      <circle cx="20" cy="20" r="10" fill="none" stroke="white" strokeWidth="1.5" opacity="0.45" />
-      <circle cx="20" cy="20" r="6" fill="none" stroke="white" strokeWidth="1.5" opacity="0.7" />
-      <circle cx="20" cy="20" r="2.5" fill="white" />
+      <text x="20" y="26" textAnchor="middle" fill="#22c55e" fontSize="18" fontWeight="bold">P</text>
     </svg>
   );
 }
 
-function SunriseIcon({ size = 28 }) {
+function HeliusIcon({ size = 28 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40">
       <rect width="40" height="40" rx="20" fill="#1a0800" />
       <defs>
-        <linearGradient id="sun-g" x1="20" y1="14" x2="20" y2="30" gradientUnits="userSpaceOnUse">
+        <linearGradient id="hel-g" x1="20" y1="14" x2="20" y2="30" gradientUnits="userSpaceOnUse">
           <stop stopColor="#fbbf24" />
           <stop offset="1" stopColor="#d97706" />
         </linearGradient>
       </defs>
-      <circle cx="20" cy="24" r="8" fill="url(#sun-g)" />
-      <rect x="0" y="24" width="40" height="16" fill="#1a0800" />
-      <line x1="20" y1="10" x2="20" y2="5" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
-      <line x1="12" y1="14" x2="9" y2="10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
-      <line x1="28" y1="14" x2="31" y2="10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
-      <line x1="6" y1="24" x2="34" y2="24" stroke="#92400e" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function ArbitrumIcon({ size = 28, className = '' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
-      <rect width="40" height="40" rx="20" fill="#213147" />
-      <path d="M20.7 11L27.5 22.5L24.2 24.5L20.7 17.5L17.2 24.5L13.9 22.5L20.7 11Z" fill="#12AAFF" />
-      <path d="M20.7 17.5L24.2 24.5L20.7 30L17.2 24.5L20.7 17.5Z" fill="white" />
-    </svg>
-  );
-}
-
-function AvalancheIcon({ size = 28, className = '' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
-      <rect width="40" height="40" rx="20" fill="#E84142" />
-      <path d="M20 10L30 28H10L20 10Z" fill="white" />
-      <path d="M20 17L25 27H15L20 17Z" fill="#E84142" />
-    </svg>
-  );
-}
-
-function BnbIcon({ size = 28, className = '' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className={className}>
-      <rect width="40" height="40" rx="20" fill="#F3BA2F" />
-      <path d="M20 8L24 12L21.5 14.5L20 13L18.5 14.5L16 12L20 8Z" fill="white" />
-      <path d="M27 15L31 19L27 23L23 19L27 15Z" fill="white" transform="scale(0.55) translate(17,13)" />
-      <path d="M13 15L17 19L13 23L9 19L13 15Z" fill="white" transform="scale(0.55) translate(17,13)" />
-      <path d="M20 18L24 22L20 26L16 22L20 18Z" fill="white" />
-      <path d="M20 32L16 28L18.5 25.5L20 27L21.5 25.5L24 28L20 32Z" fill="white" />
+      <circle cx="20" cy="20" r="10" fill="url(#hel-g)" />
     </svg>
   );
 }
@@ -124,57 +79,6 @@ function XIcon({ size = 20, className = '' }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
     </svg>
-  );
-}
-
-// ---------- Token logos ----------
-
-const TOKEN_LOGOS = {
-  ONDO: 'https://tokens.1inch.io/0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3.png',
-  UNI: 'https://tokens.1inch.io/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984.png',
-  LINK: 'https://tokens.1inch.io/0x514910771af9ca656af840dff83e8264ecf986ca.png',
-  ARB: 'https://tokens.1inch.io/0xb50721bcf8d664c30412cfbc6cf7a15145234ad1.png',
-  AAVE: 'https://tokens.1inch.io/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.png',
-  MKR: 'https://tokens.1inch.io/0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2.png',
-  PEPE: 'https://tokens.1inch.io/0x6982508145454ce325ddbe47a25d4ec3d2311933.png',
-  stETH: 'https://tokens.1inch.io/0xae7ab96520de3a18e5e111b5eaab095312d7fe84.png',
-};
-
-const TOKEN_COLORS = {
-  ONDO: '#162c5e',
-  UNI: '#ff007a',
-  LINK: '#2a5ada',
-  ARB: '#28a0f0',
-  AAVE: '#b6509e',
-  MKR: '#1aab9b',
-  PEPE: '#3cbe00',
-  stETH: '#00a3ff',
-};
-
-function TokenLogo({ symbol, size = 36 }) {
-  const [failed, setFailed] = useState(false);
-  const url = TOKEN_LOGOS[symbol];
-  const bg = TOKEN_COLORS[symbol] || '#334155';
-
-  if (!url || failed) {
-    return (
-      <div
-        className="rounded-full flex items-center justify-center font-bold text-white"
-        style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: bg }}
-      >
-        {symbol?.[0]}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={url}
-      alt={symbol}
-      className="rounded-full object-cover"
-      style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
-    />
   );
 }
 
@@ -196,151 +100,76 @@ const gradientTextStyleHero = {
 
 // ---------- Data ----------
 
-// features data moved into BentoFeaturesSection
-
 const stats = [
-  { value: '7', label: 'EVM Chains', icon: Globe },
-  { value: '8', label: 'Commands', icon: Terminal },
-  { value: '60+', label: 'Tests', icon: Shield },
-  { value: '0-100', label: 'Risk Score', icon: BarChart2 },
-  { icon: Search, label: 'Bytecode Analysis' },
+  { value: 'SOL', label: 'Solana', icon: Globe },
+  { icon: Skull, label: 'Rug Detection' },
+  { value: '0-100', label: 'Rep Score', icon: BarChart2 },
+  { icon: Users, label: 'Cluster Analysis' },
+  { icon: Shield, label: 'Deployer History' },
   { icon: Github, label: 'Open Source' },
-  { icon: GitBranch, label: 'NTT Modes' },
+  { icon: TrendingUp, label: 'Live Data' },
   { icon: Scale, label: 'Rate Limits' },
-  { icon: Eye, label: 'Bridge Detection' },
-  { icon: Layers, label: 'SPL Deploy' },
-  { icon: Shield, label: 'Risk Scoring' },
-  { icon: FileText, label: 'Report Gen' },
-  { icon: Database, label: 'Holder Analysis' },
-  { icon: Rocket, label: 'Sunrise Ready' },
+  { icon: Eye, label: 'Funding Trace' },
+  { icon: Layers, label: 'Token Discovery' },
+  { icon: Target, label: 'Pump.fun' },
+  { icon: Database, label: 'DexScreener' },
+  { icon: Wallet, label: 'Wallet Connect' },
+  { icon: Rocket, label: 'Real-Time' },
 ];
 
-const codeExample = `# Install
-cargo install --path .
-
-# Scan a token
-daybreak scan 0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3
-
-# Generate migration report
-daybreak report 0xfaba...69be3 --output ./report
-
-# Full end-to-end migration
-daybreak migrate 0xfaba...69be3 --keypair ~/sol-wallet.json`;
-
 const advancedFeatures = [
-  { icon: Shield, title: 'Risk Scoring', desc: 'Composite 0-100 across decimals, features, bytecode, holders, bridges', color: 'amber' },
-  { icon: GitBranch, title: 'NTT Compatibility', desc: 'Locking vs Burning mode, decimal trimming, rebasing detection', color: 'green' },
-  { icon: Search, title: 'Bytecode Analysis', desc: 'Proxy detection, selfdestruct, delegatecall, complexity rating', color: 'purple' },
-  { icon: Eye, title: 'Bridge Detection', desc: 'WormholeScan API, Portal/NTT/Native token classification', color: 'blue' },
-  { icon: Layers, title: 'SPL Deployment', desc: 'Mint creation, Metaplex metadata, authority transfer', color: 'orange' },
-  { icon: Rocket, title: 'Migration Pipeline', desc: 'Scan \u2192 Deploy \u2192 Config \u2192 NTT CLI \u2192 Verify in one command', color: 'red' },
-  { icon: BarChart2, title: 'Rate Limits', desc: 'Volume-based NTT rate limit calculation with supply floors', color: 'cyan' },
-  { icon: Activity, title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection', color: 'yellow' },
-  { icon: FileText, title: 'Report Generation', desc: 'Markdown, JSON, deployment.json, ntt-commands.sh', color: 'pink' },
-  { icon: Target, title: 'Token Discovery', desc: 'CoinGecko API, curated list of 55+ migration-ready tokens', color: 'emerald' },
-  { icon: Terminal, title: 'CLI-First', desc: '8 commands: scan, report, compare, list, deploy, check, migrate, status', color: 'amber' },
-  { icon: Settings, title: 'Path Comparison', desc: 'NTT vs Neon EVM vs Native rewrite evaluation', color: 'green' },
-  { icon: AlertTriangle, title: 'Fee Detection', desc: 'Fee-on-transfer, rebasing, pausable, blacklist flagging', color: 'red' },
-  { icon: Globe, title: '7 EVM Chains', desc: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche', color: 'blue' },
-  { icon: Lock, title: 'Proxy Analysis', desc: 'EIP-1167 minimal proxy, EIP-1967 transparent proxy, storage slot lookup', color: 'purple' },
-  { icon: Database, title: 'Post-Migration', desc: 'SPL token info, WormholeScan transfers, bridge health monitoring', color: 'cyan' },
+  { icon: Shield, title: 'Reputation Score', desc: 'Composite 0-100 score across rug rate, token count, lifespan, and cluster size.', color: 'amber' },
+  { icon: Skull, title: 'Rug Detection', desc: 'Dead token identification via liquidity analysis. Automatic rug rate calculation.', color: 'red' },
+  { icon: Users, title: 'Cluster Analysis', desc: 'Traces funding source, finds linked deployers, detects rug networks.', color: 'purple' },
+  { icon: Eye, title: 'Funding Trace', desc: 'Tracks earliest SOL transfer to deployer wallet. Identifies cluster funder.', color: 'blue' },
+  { icon: Target, title: 'Pump.fun Detection', desc: 'Identifies Pump.fun token creations from on-chain transaction history.', color: 'green' },
+  { icon: TrendingUp, title: 'Live Liquidity', desc: 'Real-time token status via DexScreener. Alive/dead classification.', color: 'cyan' },
+  { icon: BarChart2, title: 'Verdict System', desc: 'CLEAN / SUSPICIOUS / SERIAL_RUGGER based on rug rate thresholds.', color: 'yellow' },
+  { icon: Activity, title: 'Token History', desc: 'Full deployer token list with creation dates, liquidity, and status.', color: 'orange' },
+  { icon: Database, title: 'Helius + DexScreener', desc: 'Enhanced API integration for fast, efficient on-chain data retrieval.', color: 'emerald' },
+  { icon: Wallet, title: 'Wallet Auth', desc: 'Connect Phantom or Solflare. Signature-based authentication.', color: 'purple' },
+  { icon: Link2, title: 'API Access', desc: 'REST API at api.daybreakscan.com. Auth-protected scan endpoints.', color: 'amber' },
+  { icon: Lock, title: 'Rate Protected', desc: 'Per-wallet rate limiting. 10 scans/hour to protect Helius credits.', color: 'red' },
+  { icon: Zap, title: 'Fast Scans', desc: 'Enhanced API-first strategy. Most scans complete in 5-15 seconds.', color: 'cyan' },
+  { icon: Globe, title: 'Solana Native', desc: 'Built specifically for Solana. No EVM, no bridges, pure on-chain data.', color: 'blue' },
+  { icon: Cpu, title: 'Caching', desc: 'Metadata and DexScreener caches reduce API calls by 30-60%.', color: 'green' },
+  { icon: Bot, title: 'Twitter Bot', desc: 'Coming soon: automated deployer scans posted to @DaybreakScan.', color: 'pink' },
 ];
 
 // ---------- Sections ----------
 
-function UserTypeSection() {
-  const [userType, setUserType] = useState(null);
-
-  return (
-    <section className="py-12 px-6">
-      <div className="max-w-2xl mx-auto">
-        {!userType ? (
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={() => setUserType('developer')}
-              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors text-sm"
-            >
-              I'M A DEVELOPER
-            </button>
-            <button
-              onClick={() => setUserType('project')}
-              className="px-6 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-semibold rounded-lg transition-colors text-sm border border-amber-500/50"
-            >
-              I'M A PROJECT TEAM
-            </button>
-          </div>
-        ) : (
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-6">
-            <button
-              onClick={() => setUserType(null)}
-              className="text-slate-400 hover:text-slate-300 text-xs mb-4 transition-colors"
-            >
-              &larr; Back
-            </button>
-
-            {userType === 'developer' ? (
-              <div className="space-y-3">
-                <h3 className="text-amber-400 font-semibold">Quick Start</h3>
-                <code className="block bg-slate-900 p-2 rounded text-amber-300 text-xs overflow-x-auto mb-3">
-                  cargo install --path . && daybreak scan 0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3
-                </code>
-                <p className="text-slate-400 text-xs">Scans ONDO token. Risk score, NTT compatibility, bytecode analysis in seconds. Try <span className="text-amber-300">daybreak list</span> to discover migration-ready tokens.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <h3 className="text-amber-400 font-semibold">Full Migration</h3>
-                <code className="block bg-slate-900 p-2 rounded text-amber-300 text-xs overflow-x-auto mb-3">
-                  daybreak migrate 0xYOUR_TOKEN --keypair ~/wallet.json
-                </code>
-                <p className="text-slate-400 text-xs">End-to-end: scan &rarr; deploy SPL &rarr; configure NTT &rarr; bridge via Sunrise. Full report at <a href="/scan" className="text-amber-400 hover:underline">/scan</a>.</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 function MarketsSection() {
   const [marketSlide, setMarketSlide] = useState(0);
 
-  const riskExamples = [
-    { name: 'ONDO', statusIcon: CheckCircle2, status: 'Low Risk (36)', detail: 'Locking mode' },
-    { name: 'UNI', statusIcon: CheckCircle2, status: 'Low Risk (28)', detail: 'Locking mode' },
-    { name: 'LINK', statusIcon: CheckCircle2, status: 'Low Risk (31)', detail: 'Locking mode' },
-    { name: 'ARB', statusIcon: CheckCircle2, status: 'Low Risk (25)', detail: 'Locking mode' },
-    { name: 'AAVE', statusIcon: AlertTriangle, status: 'Medium (42)', detail: 'Proxy detected' },
-    { name: 'MKR', statusIcon: AlertTriangle, status: 'Medium (44)', detail: 'Burning mode' },
-    { name: 'PEPE', statusIcon: AlertTriangle, status: 'Medium (55)', detail: 'High concentration' },
-    { name: 'stETH', statusIcon: XCircle, status: 'High Risk (89)', detail: 'Rebasing!' },
+  const verdicts = [
+    { name: 'CLEAN', icon: CheckCircle2, status: 'Score 70-100', detail: 'Safe deployer', color: 'green' },
+    { name: 'SUSPICIOUS', icon: AlertTriangle, status: 'Score 30-70', detail: 'Moderate risk', color: 'yellow' },
+    { name: 'SERIAL RUGGER', icon: XCircle, status: 'Score 0-30', detail: '>70% rug rate', color: 'red' },
+    { name: 'Rug Rate', icon: Skull, status: 'Key Metric', detail: 'Dead / Total tokens', color: 'amber' },
   ];
 
-  const capabilities = [
-    { name: 'Mintable', icon: Zap, status: 'Detected' },
-    { name: 'Burnable', icon: Zap, status: 'Detected' },
-    { name: 'Pausable', icon: AlertTriangle, status: 'Warning' },
-    { name: 'Blacklist', icon: AlertTriangle, status: 'Warning' },
-    { name: 'Fee-on-Transfer', icon: XCircle, status: 'Blocker' },
-    { name: 'Rebasing', icon: XCircle, status: 'Blocker' },
-    { name: 'Permit (EIP-2612)', icon: CheckCircle2, status: 'Info' },
-    { name: 'Proxy (EIP-1967)', icon: AlertTriangle, status: 'Monitor' },
+  const signals = [
+    { name: 'Token Count', icon: Layers, status: 'Deployer stat' },
+    { name: 'Tokens Dead', icon: XCircle, status: 'Liveness check' },
+    { name: 'Funding Source', icon: Wallet, status: 'First SOL in' },
+    { name: 'Cluster Size', icon: Users, status: 'Linked wallets' },
+    { name: 'Rug Rate', icon: BarChart2, status: 'Dead / total' },
+    { name: 'Liquidity', icon: TrendingUp, status: 'DexScreener' },
+    { name: 'First Seen', icon: Eye, status: 'Oldest tx' },
+    { name: 'Rep Score', icon: Shield, status: '0-100 composite' },
   ];
 
-  const chains = [
-    { name: 'Ethereum', icon: SiEthereum, status: 'Supported' },
-    { name: 'Polygon', icon: SiPolygon, status: 'Supported' },
-    { name: 'Arbitrum', icon: ArbitrumIcon, status: 'Supported', isCustom: true },
-    { name: 'BSC', icon: BnbIcon, status: 'Supported', isCustom: true },
-    { name: 'Base', icon: SiCoinbase, status: 'Supported' },
-    { name: 'Optimism', icon: SiOptimism, status: 'Supported' },
-    { name: 'Avalanche', icon: AvalancheIcon, status: 'Supported', isCustom: true },
+  const dataSources = [
+    { name: 'Helius', icon: Zap, status: 'RPC + Enhanced' },
+    { name: 'DexScreener', icon: TrendingUp, status: 'Liquidity data' },
+    { name: 'Pump.fun', icon: Rocket, status: 'Token detection' },
+    { name: 'Solana', icon: SiSolana, status: 'On-chain', isSi: true },
   ];
 
   const slides = [
-    { title: 'Risk Scoring', subtitle: 'Analyze any ERC-20 token for migration readiness', markets: riskExamples, isTokenSlide: true },
-    { title: 'Capability Detection', subtitle: 'Deep bytecode inspection for NTT compatibility', markets: capabilities },
-    { title: 'Supported Chains', subtitle: 'Scan tokens on any major EVM chain', markets: chains },
+    { title: 'Verdicts', subtitle: 'Three-tier deployer classification', markets: verdicts, isVerdictSlide: true },
+    { title: 'Detection Signals', subtitle: 'Data points analyzed per scan', markets: signals },
+    { title: 'Data Sources', subtitle: 'Where we get the data', markets: dataSources },
   ];
 
   const currentSlide = slides[marketSlide];
@@ -348,15 +177,10 @@ function MarketsSection() {
   return (
     <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
       <div className="max-w-4xl mx-auto">
-        <h2
-          className="text-3xl md:text-4xl font-bold text-center mb-2"
-          style={gradientTextStyle}
-        >
-          Analyze any token
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+          Analyze any deployer
         </h2>
-        <p className="text-slate-400 text-center mb-4">
-          {currentSlide.subtitle}
-        </p>
+        <p className="text-slate-400 text-center mb-4">{currentSlide.subtitle}</p>
 
         <div className="flex justify-center gap-2 mb-8">
           {slides.map((slide, idx) => (
@@ -364,9 +188,7 @@ function MarketsSection() {
               key={idx}
               onClick={() => setMarketSlide(idx)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                idx === marketSlide
-                  ? 'bg-amber-500 text-slate-900'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                idx === marketSlide ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               }`}
             >
               {slide.title}
@@ -378,44 +200,30 @@ function MarketsSection() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {currentSlide.markets.map((market) => {
               const Icon = market.icon;
-              const StatusIcon = market.statusIcon;
               return (
                 <div
                   key={market.name}
                   className="flex flex-col items-center gap-2 p-5 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
                 >
-                  {currentSlide.isTokenSlide ? (
-                    <div className="relative">
-                      <TokenLogo symbol={market.name} size={40} />
-                      <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-slate-800">
-                        <StatusIcon
-                          size={14}
-                          className={
-                            market.status.includes('Low') ? 'text-green-400'
-                              : market.status.includes('High') ? 'text-red-400'
-                              : 'text-yellow-400'
-                          }
-                        />
-                      </div>
-                    </div>
-                  ) : market.isCustom ? (
-                    <Icon size={36} />
+                  {market.isSi ? (
+                    <Icon size={36} className="text-[#9945FF]" />
                   ) : (
-                    <Icon size={36} className="text-amber-400" />
+                    <Icon size={36} className={
+                      market.color === 'green' ? 'text-green-400'
+                        : market.color === 'red' ? 'text-red-400'
+                        : market.color === 'yellow' ? 'text-yellow-400'
+                        : 'text-amber-400'
+                    } />
                   )}
                   <span className="text-white font-medium">{market.name}</span>
                   <span className={`text-xs ${
-                    market.status.includes('Low') || market.status === 'Supported' || market.status === 'Detected' || market.status === 'Info'
+                    market.color === 'green' || market.status === 'Deployer stat'
                       ? 'text-green-400'
-                      : market.status.includes('High') || market.status === 'Blocker'
-                      ? 'text-red-400'
-                      : 'text-yellow-400'
-                  }`}>
-                    {market.status}
-                  </span>
-                  {market.detail && (
-                    <span className="text-xs text-slate-500">{market.detail}</span>
-                  )}
+                      : market.color === 'red' ? 'text-red-400'
+                      : market.color === 'yellow' ? 'text-yellow-400'
+                      : 'text-amber-400'
+                  }`}>{market.status}</span>
+                  {market.detail && <span className="text-xs text-slate-500">{market.detail}</span>}
                 </div>
               );
             })}
@@ -481,14 +289,11 @@ function AdvancedFeaturesSection() {
   return (
     <section className="py-20 px-6 relative z-10">
       <div className="max-w-5xl mx-auto">
-        <h2
-          className="text-3xl md:text-4xl font-bold text-center mb-2"
-          style={gradientTextStyle}
-        >
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
           Deep Analysis Features
         </h2>
         <p className="text-slate-400 text-center mb-10">
-          Professional-grade migration tooling.
+          Professional-grade deployer intelligence.
         </p>
 
         <div className="relative">
@@ -536,34 +341,6 @@ function AdvancedFeaturesSection() {
             </button>
           </div>
         </div>
-
-        {/* Supported chains */}
-        <div className="mt-12">
-          <h3 className="text-lg font-semibold text-white text-center mb-4">Supported Chains</h3>
-          <div className="flex flex-wrap justify-center gap-4">
-            {[
-              { name: 'Ethereum', icon: SiEthereum },
-              { name: 'Polygon', icon: SiPolygon },
-              { name: 'Arbitrum', icon: ArbitrumIcon, isCustom: true },
-              { name: 'BSC', icon: BnbIcon, isCustom: true },
-              { name: 'Base', icon: SiCoinbase },
-              { name: 'Optimism', icon: SiOptimism },
-              { name: 'Avalanche', icon: AvalancheIcon, isCustom: true },
-              { name: 'Solana', icon: SiSolana },
-            ].map((chain) => {
-              const Icon = chain.icon;
-              return (
-                <div
-                  key={chain.name}
-                  className="flex flex-col items-center gap-2 p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
-                >
-                  {chain.isCustom ? <Icon size={28} /> : <Icon size={28} className="text-amber-400" />}
-                  <span className="text-slate-300 text-sm">{chain.name}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -572,17 +349,17 @@ function AdvancedFeaturesSection() {
 // ---------- Spotlight Bento Grid ----------
 
 const bentoFeatures = [
-  { tag: '0-100', title: 'Risk Scoring', desc: 'Composite score across 5 dimensions: decimals, features, bytecode, holders, bridge status.', color: 'amber', hero: true },
-  { tag: 'NTT', title: 'Mode Analysis', desc: 'Auto-recommends Locking vs Burning. Detects mint, burn, pause, blacklist, rebasing, fee-on-transfer.', color: 'green', hero: true },
-  { tag: '0x..', title: 'Bytecode Inspection', desc: 'Proxy detection (EIP-1167, EIP-1967), selfdestruct, delegatecall, complexity rating.', color: 'purple' },
-  { tag: 'WH', title: 'Bridge Detection', desc: 'WormholeScan API queries. Portal, NTT, and native token classification.', color: 'blue' },
-  { tag: 'SPL', title: 'Token Deployment', desc: 'Metaplex metadata, decimal trimming (18\u21928), mint authority transfer.', color: 'orange' },
-  { tag: 'E2E', title: 'Full Migration', desc: 'Scan \u2192 Deploy SPL \u2192 Config NTT \u2192 CLI \u2192 Verify. One command.', color: 'red', hero: true },
-  { tag: '7ch', title: 'Multi-Chain', desc: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, Avalanche.', color: 'emerald' },
-  { tag: 'RL', title: 'Rate Limits', desc: 'NTT rate limits from 24h volume and supply with per-tx caps.', color: 'cyan' },
-  { tag: 'T10', title: 'Holder Analysis', desc: 'Top-10 concentration, whale scoring, governance detection.', color: 'pink' },
-  { tag: '.md', title: 'Report Generation', desc: 'Markdown + deployment.json + ntt-commands.sh with cost estimates.', color: 'yellow' },
-  { tag: 'API', title: 'Token Discovery', desc: 'CoinGecko integration. Find migration-ready tokens by market cap.', color: 'emerald' },
+  { tag: '0-100', title: 'Reputation Score', desc: 'Composite score across rug rate, token count, average lifespan, and cluster connections.', color: 'amber', hero: true },
+  { tag: 'RUG', title: 'Rug Detection', desc: 'Automatic dead token identification via DexScreener liquidity checks. Calculates rug rate.', color: 'red', hero: true },
+  { tag: 'FUND', title: 'Funding Trace', desc: 'Tracks earliest incoming SOL to deployer wallet. Identifies the funding source.', color: 'blue' },
+  { tag: 'NET', title: 'Cluster Analysis', desc: 'Scans funder outgoing transfers. Finds linked deployers and rug networks.', color: 'purple' },
+  { tag: 'PF', title: 'Pump.fun Detection', desc: 'Identifies Pump.fun token creations from enhanced transaction history.', color: 'green' },
+  { tag: 'LIVE', title: 'Live Scanning', desc: 'Real-time deployer analysis. Connect wallet, paste address, get results.', color: 'cyan', hero: true },
+  { tag: 'SOL', title: 'Solana Native', desc: 'Built specifically for Solana. Helius Enhanced API + DexScreener integration.', color: 'emerald' },
+  { tag: 'AUTH', title: 'Wallet Auth', desc: 'Phantom or Solflare. Sign a message to authenticate. No seed phrases.', color: 'orange' },
+  { tag: 'API', title: 'REST API', desc: 'api.daybreakscan.com. Protected endpoints for token and wallet scanning.', color: 'yellow' },
+  { tag: '10/h', title: 'Rate Limits', desc: 'Per-wallet rate limiting to protect Helius API credits from abuse.', color: 'pink' },
+  { tag: 'DSX', title: 'DexScreener', desc: 'Bulk token liveness checks. Liquidity and volume data for verdict accuracy.', color: 'emerald' },
 ];
 
 const bentoIconColors = {
@@ -635,10 +412,10 @@ function BentoFeaturesSection() {
     <section ref={sectionRef} className="py-20 px-6 relative z-10">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
-          Everything you need to migrate
+          Everything you need to stay safe
         </h2>
         <p className="text-slate-400 text-center mb-12">
-          Complete tooling for EVM-to-Solana token migration via Wormhole NTT.
+          Complete deployer intelligence for Solana token analysis.
         </p>
 
         <div
@@ -658,12 +435,10 @@ function BentoFeaturesSection() {
                   transition: `opacity 0.6s ease ${i * 60}ms, transform 0.6s ease ${i * 60}ms, border-color 0.3s, background-color 0.3s`,
                 }}
               >
-                {/* Spotlight overlay */}
                 <div
                   ref={el => { spotsRef.current[i] = el; }}
                   className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-500"
                 />
-                {/* Content */}
                 <div className="relative z-10 p-6">
                   <span className={`inline-block px-2.5 py-1 rounded-lg bg-white/[0.05] mb-4 font-mono text-xs font-bold tracking-wide ${bentoIconColors[feature.color]}`}>
                     {feature.tag}
@@ -683,6 +458,7 @@ function BentoFeaturesSection() {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { connected } = useWallet();
   const [address, setAddress] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -694,7 +470,6 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen relative">
       <SunriseShader />
-      {/* Dark overlay for content readability */}
       <div className="fixed inset-0 z-[1] pointer-events-none bg-gradient-to-b from-slate-900/40 via-slate-900/30 to-slate-900/70" />
 
       {/* Nav */}
@@ -705,6 +480,7 @@ export default function LandingPage() {
           </div>
           <div className="hidden md:flex items-center gap-5">
             <a href="/scan" className="text-slate-400 hover:text-white transition-colors text-sm">Scanner</a>
+            <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4 hover:!bg-amber-400" />
             <a
               href="https://github.com/Jpatching/daybreak"
               target="_blank"
@@ -732,17 +508,15 @@ export default function LandingPage() {
           </button>
         </div>
 
-        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
             <div className="px-6 py-4 flex flex-col gap-3">
-              <a
-                href="/scan"
-                className="text-slate-300 hover:text-white transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/scan" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
                 Scanner
               </a>
+              <div className="py-2">
+                <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4" />
+              </div>
               <a
                 href="https://github.com/Jpatching/daybreak"
                 target="_blank"
@@ -775,20 +549,19 @@ export default function LandingPage() {
                 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight"
                 style={gradientTextStyleHero}
               >
-                Scan Any ERC-20<br />for Solana Migration
+                Check Any Deployer<br />Before You Ape
               </h1>
               <p className="text-xl text-slate-300 mb-8" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.3)' }}>
-                Risk scoring. NTT analysis. Powered by{' '}
-                <span className="text-amber-400 font-semibold">Wormhole Sunrise</span>.
+                Deployer reputation scoring. Rug detection. On{' '}
+                <span className="text-amber-400 font-semibold">Solana</span>.
               </p>
 
-              {/* Scanner input in hero */}
               <form onSubmit={handleScan} className="flex gap-3 mb-6">
                 <input
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="0x token address or symbol..."
+                  placeholder="Paste a Solana token address..."
                   className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50 font-mono text-sm"
                 />
                 <button
@@ -801,7 +574,7 @@ export default function LandingPage() {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
-                  href="https://github.com/Jpatching/daybreak#quickstart"
+                  href="https://github.com/Jpatching/daybreak"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-8 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors text-lg flex items-center justify-center gap-2"
@@ -826,29 +599,29 @@ export default function LandingPage() {
                   <div className="flex-1 flex justify-center">
                     <div className="bg-slate-700/50 rounded-md px-4 py-1.5 flex items-center gap-2 text-xs text-slate-400 max-w-xs">
                       <Lock size={12} />
-                      <span>daybreak scan ONDO</span>
+                      <span>daybreak deployer scan</span>
                     </div>
                   </div>
                   <div className="w-16"></div>
                 </div>
                 <div className="bg-slate-900 p-4 font-mono text-xs text-slate-300 space-y-1">
                   <div className="text-slate-600">{"\u2550".repeat(48)}</div>
-                  <div className="text-white font-semibold">  Ondo Finance (ONDO) on Ethereum</div>
+                  <div className="text-white font-semibold">  Deployer Reputation Scan</div>
                   <div className="text-slate-600">{"\u2550".repeat(48)}</div>
-                  <div className="mt-2 text-slate-500">&mdash;&mdash; Token Information &mdash;&mdash;</div>
-                  <div>  Decimals:     <span className="text-white">18</span></div>
-                  <div>  Total Supply: <span className="text-white">10,000,000,000</span></div>
-                  <div className="mt-2 text-slate-500">&mdash;&mdash; Capabilities &mdash;&mdash;</div>
-                  <div>  Mintable     <span className="text-green-400">Yes</span></div>
-                  <div>  Burnable     <span className="text-slate-500">No</span></div>
-                  <div>  Pausable     <span className="text-slate-500">No</span></div>
-                  <div className="mt-2 text-slate-500">&mdash;&mdash; NTT Compatibility &mdash;&mdash;</div>
-                  <div>  Status:      <span className="text-green-400">Compatible</span></div>
-                  <div>  Mode:        <span className="text-amber-400">Locking</span></div>
-                  <div>  Decimals:    <span className="text-white">18 &rarr; 8</span> <span className="text-yellow-400">(trimming)</span></div>
-                  <div className="mt-2 text-slate-500">&mdash;&mdash; Risk Score &mdash;&mdash;</div>
-                  <div>  Score:       <span className="text-green-400">36/100 (Low)</span></div>
-                  <div className="mt-2 text-green-400">&check; Strong candidate for NTT migration via Sunrise</div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Token &mdash;&mdash;</div>
+                  <div>  Name:        <span className="text-white">ShadyToken (SHADY)</span></div>
+                  <div>  Address:     <span className="text-slate-400">7xKQ...pump</span></div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Deployer &mdash;&mdash;</div>
+                  <div>  Wallet:      <span className="text-slate-400">Dk9f...3xYp</span></div>
+                  <div>  Tokens:      <span className="text-white">194</span> created</div>
+                  <div>  Dead:        <span className="text-red-400">157</span> (<span className="text-red-400">80.9%</span>)</div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Reputation &mdash;&mdash;</div>
+                  <div>  Score:       <span className="text-red-400">8/100</span></div>
+                  <div>  Verdict:     <span className="text-red-400 font-bold">SERIAL_RUGGER</span></div>
+                  <div className="mt-2 text-slate-500">&mdash;&mdash; Funding &mdash;&mdash;</div>
+                  <div>  Source:      <span className="text-slate-400">Hx7m...9aKz</span></div>
+                  <div>  Cluster:     <span className="text-yellow-400">12 linked deployers</span></div>
+                  <div className="mt-2 text-red-400">&cross; Do NOT ape. Serial rugger with cluster activity.</div>
                 </div>
               </div>
             </div>
@@ -859,36 +632,34 @@ export default function LandingPage() {
       {/* Ecosystem / Branding */}
       <section className="py-10 px-6 border-y border-white/5 relative z-10 bg-slate-900/60 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto">
-          <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Built for the Sunrise Ecosystem</p>
+          <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Powered By</p>
           <div className="flex flex-col sm:flex-row justify-center items-center gap-8 sm:gap-12">
-            <div className="flex items-center gap-3">
-              <WormholeIcon size={36} />
-              <div>
-                <div className="text-white font-semibold text-sm">Wormhole</div>
-                <div className="text-slate-500 text-xs">NTT Protocol</div>
-              </div>
-            </div>
-            <div className="hidden sm:block w-px h-10 bg-slate-700" />
-            <div className="flex items-center gap-3">
-              <SunriseIcon size={36} />
-              <div>
-                <div className="text-white font-semibold text-sm">Sunrise</div>
-                <div className="text-slate-500 text-xs">Liquidity Gateway</div>
-              </div>
-            </div>
-            <div className="hidden sm:block w-px h-10 bg-slate-700" />
             <div className="flex items-center gap-3">
               <SiSolana size={36} className="text-[#9945FF]" />
               <div>
                 <div className="text-white font-semibold text-sm">Solana</div>
-                <div className="text-slate-500 text-xs">Target Chain</div>
+                <div className="text-slate-500 text-xs">On-Chain Data</div>
+              </div>
+            </div>
+            <div className="hidden sm:block w-px h-10 bg-slate-700" />
+            <div className="flex items-center gap-3">
+              <PumpFunIcon size={36} />
+              <div>
+                <div className="text-white font-semibold text-sm">Pump.fun</div>
+                <div className="text-slate-500 text-xs">Token Detection</div>
+              </div>
+            </div>
+            <div className="hidden sm:block w-px h-10 bg-slate-700" />
+            <div className="flex items-center gap-3">
+              <HeliusIcon size={36} />
+              <div>
+                <div className="text-white font-semibold text-sm">Helius</div>
+                <div className="text-slate-500 text-xs">Enhanced API</div>
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      <div className="relative z-10"><UserTypeSection /></div>
 
       {/* Stats */}
       <section className="py-8 border-y border-white/5 overflow-hidden relative z-10 bg-slate-900/60 backdrop-blur-sm">
@@ -919,36 +690,6 @@ export default function LandingPage() {
         `}</style>
       </section>
 
-      {/* Deployment Options */}
-      <section className="py-20 px-6 relative z-10">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
-            Install & run
-          </h2>
-          <p className="text-slate-400 text-center mb-10">
-            Rust CLI. Single binary. No runtime dependencies.
-          </p>
-
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
-            <div className="px-6 py-4 bg-slate-800 border-b border-slate-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">CLI Tool</h3>
-                  <p className="text-slate-400 text-sm">Install from source, scan any token</p>
-                </div>
-                <span className="px-3 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-full">Rust</span>
-              </div>
-            </div>
-            <pre className="p-4 overflow-x-auto">
-              <code className="text-xs text-slate-300 font-mono whitespace-pre">{codeExample}</code>
-            </pre>
-            <div className="px-6 py-3 bg-slate-800/50 border-t border-slate-700 text-xs text-slate-400">
-              7 chains &bull; 8 commands &bull; risk scoring &bull; NTT analysis &bull; SPL deployment
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Features - Spotlight Bento Grid */}
       <BentoFeaturesSection />
 
@@ -958,45 +699,45 @@ export default function LandingPage() {
       {/* Advanced Features */}
       <AdvancedFeaturesSection />
 
-      {/* FAQ & Security */}
+      {/* FAQ */}
       <section className="py-20 px-6 relative z-10">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
             FAQ
           </h2>
           <p className="text-slate-400 text-center mb-10">
-            Common questions about Daybreak and token migration.
+            Common questions about Daybreak.
           </p>
 
           <div className="space-y-4">
             {[
               {
-                q: 'What is Wormhole NTT?',
-                a: 'Native Token Transfers (NTT) is Wormhole\'s framework for bringing tokens to new chains natively \u2014 not as wrapped assets. Tokens retain full utility and fungibility.',
+                q: 'What does Daybreak do?',
+                a: 'Daybreak scans any Solana token address and analyzes the deployer\'s on-chain history. It calculates a reputation score based on how many tokens they\'ve created, how many are dead (rugged), and their funding network.',
               },
               {
-                q: 'What\'s the difference between Locking and Burning mode?',
-                a: 'Locking: tokens are locked on the source chain and minted on Solana. Burning: tokens are burned on source and minted on Solana. Burning requires the token to have burn capability.',
+                q: 'How does rug detection work?',
+                a: 'We check each of the deployer\'s tokens against DexScreener for liquidity. Tokens with less than $100 liquidity and no 24h volume are classified as dead. The rug rate is dead tokens / total tokens.',
               },
               {
-                q: 'Why does decimal trimming matter?',
-                a: 'ERC-20 tokens typically use 18 decimals, but Solana SPL tokens use 8. The 10-digit precision loss means tiny dust amounts (< 0.00000001 tokens) can\'t be bridged. Dust is recoverable if bridged back.',
+                q: 'What is a reputation score?',
+                a: 'A 0-100 composite score. It weighs rug rate (40%), token count penalty (20%), average token lifespan (20%), and cluster connections (20%). Higher is better: 70+ is CLEAN, below 30 is SERIAL_RUGGER.',
               },
               {
-                q: 'Can rebasing tokens migrate?',
-                a: 'Not directly. Rebasing tokens (like stETH) change balances automatically, which desyncs locked amounts from minted supply. Use a non-rebasing wrapper (like wstETH) instead.',
+                q: 'What is cluster analysis?',
+                a: 'We trace who funded the deployer\'s wallet, then check if that funder also funded other Pump.fun deployers. This reveals rug networks where one entity controls many deployer wallets.',
               },
               {
-                q: 'What is Sunrise?',
-                a: 'Sunrise is Wormhole\'s day-one liquidity gateway for Solana. It provides immediate liquidity for bridged assets so tokens aren\'t stranded on arrival.',
+                q: 'Why do I need to connect my wallet?',
+                a: 'Wallet authentication protects our Helius API credits. Each scan costs 50-100 API calls. You sign a message to prove wallet ownership \u2014 no transactions, no seed phrases, no funds at risk.',
+              },
+              {
+                q: 'Is there a rate limit?',
+                a: 'Yes, 10 scans per hour per wallet. This prevents abuse while allowing plenty of scans for normal use.',
               },
               {
                 q: 'Is Daybreak open source?',
-                a: 'Yes. MIT license. You can audit every line, fork it, modify it. Built in Rust with 60+ unit tests.',
-              },
-              {
-                q: 'Which chains are supported?',
-                a: 'Ethereum, Polygon, BSC, Arbitrum, Base, Optimism, and Avalanche. Any chain with an Etherscan-compatible block explorer API.',
+                a: 'Yes. MIT license. The full backend, frontend, and Rust CLI are on GitHub.',
               },
             ].map((faq, idx) => (
               <div key={idx} className="p-5 bg-slate-800/50 rounded-xl border border-slate-700">
@@ -1015,10 +756,10 @@ export default function LandingPage() {
       <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
-            Ready to migrate?
+            Ready to scan?
           </h2>
           <p className="text-slate-400 mb-8">
-            Daybreak is free, open source, and built for Wormhole Sunrise.
+            Daybreak is free, open source, and built for Solana.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
@@ -1044,7 +785,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <DaybreakLogo size={20} />
-            <span className="text-slate-500 text-sm">ERC-20 &rarr; Solana</span>
+            <span className="text-slate-500 text-sm">Solana Deployer Reputation</span>
           </div>
           <div className="flex items-center gap-6 text-slate-400 text-sm flex-wrap justify-center">
             <a href="/scan" className="hover:text-white transition-colors">Scanner</a>
@@ -1052,10 +793,6 @@ export default function LandingPage() {
             <a href="https://x.com/DaybreakScan" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
               <XIcon size={14} />
               Twitter
-            </a>
-            <a href="https://wormhole.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
-              <WormholeIcon size={14} />
-              Wormhole
             </a>
             <a href="https://solana.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
               <SiSolana size={14} />

@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import useAuth from '../hooks/useAuth';
+import { scanToken } from '../api';
 import {
   Search,
   ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Info,
   Shield,
-  GitBranch,
-  Layers,
-  Terminal,
-  FileText,
-  Lock,
   Loader2,
-  Download,
   Menu,
   X,
+  Wallet,
+  Skull,
+  Users,
+  Eye,
+  TrendingUp,
+  ExternalLink,
 } from 'lucide-react';
 
 // ---------- Branding ----------
@@ -32,47 +35,6 @@ function DaybreakLogo({ size = 28 }) {
   );
 }
 
-// ---------- Token logos ----------
-
-const TOKEN_LOGOS = {
-  ONDO: 'https://tokens.1inch.io/0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3.png',
-  AAVE: 'https://tokens.1inch.io/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.png',
-  stETH: 'https://tokens.1inch.io/0xae7ab96520de3a18e5e111b5eaab095312d7fe84.png',
-};
-
-const TOKEN_COLORS = {
-  ONDO: '#162c5e',
-  AAVE: '#b6509e',
-  stETH: '#00a3ff',
-};
-
-function TokenLogo({ symbol, size = 36 }) {
-  const [failed, setFailed] = useState(false);
-  const url = TOKEN_LOGOS[symbol];
-  const bg = TOKEN_COLORS[symbol] || '#334155';
-
-  if (!url || failed) {
-    return (
-      <div
-        className="rounded-full flex items-center justify-center font-bold text-white"
-        style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: bg }}
-      >
-        {symbol?.[0]}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={url}
-      alt={symbol}
-      className="rounded-full object-cover"
-      style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
-    />
-  );
-}
-
 // ---------- Gradient ----------
 
 const gradientTextStyle = {
@@ -82,119 +44,13 @@ const gradientTextStyle = {
   filter: 'drop-shadow(0 0 15px rgba(245, 158, 11, 0.4))',
 };
 
-// ---------- Mock data ----------
+// ---------- Reputation Gauge ----------
 
-const MOCK_RESULTS = {
-  '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3': {
-    name: 'Ondo Finance', symbol: 'ONDO', chain: 'Ethereum',
-    address: '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3',
-    decimals: 18, totalSupply: '10,000,000,000', riskScore: 36, riskRating: 'Low',
-    nttCompatible: true, nttMode: 'Locking',
-    bytecode: { sizeKb: 8.2, complexity: 'Moderate', isProxy: false, hasSelfDestruct: false, hasDelegateCall: false },
-    capabilities: [
-      { name: 'Mintable', detected: true, severity: 'info' },
-      { name: 'Burnable', detected: false, severity: 'info' },
-      { name: 'Pausable', detected: false, severity: 'warning' },
-      { name: 'Blacklist', detected: false, severity: 'warning' },
-      { name: 'Permit (EIP-2612)', detected: true, severity: 'info' },
-      { name: 'Fee-on-Transfer', detected: false, severity: 'error' },
-      { name: 'Rebasing', detected: false, severity: 'error' },
-    ],
-    riskBreakdown: [
-      { dim: 'Decimal Handling', score: 20, max: 20 },
-      { dim: 'Token Features', score: 0, max: 25 },
-      { dim: 'Bytecode Complexity', score: 8, max: 20 },
-      { dim: 'Holder Concentration', score: 5, max: 15 },
-      { dim: 'Bridge Status', score: 0, max: 20 },
-    ],
-    issues: [
-      { severity: 'WARNING', msg: 'Decimal trimming: 18 \u2192 8. Max dust per tx: < 0.00000001 tokens.' },
-      { severity: 'INFO', msg: 'Mintable token. Locking mode recommended (mint authority stays on source chain).' },
-    ],
-    verdict: 'ONDO is a strong candidate for NTT migration via Sunrise. Recommended mode: Locking.',
-  },
-  '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9': {
-    name: 'Aave', symbol: 'AAVE', chain: 'Ethereum',
-    address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
-    decimals: 18, totalSupply: '16,000,000', riskScore: 42, riskRating: 'Medium',
-    nttCompatible: true, nttMode: 'Locking',
-    bytecode: { sizeKb: 14.8, complexity: 'Moderate', isProxy: true, hasSelfDestruct: false, hasDelegateCall: true },
-    capabilities: [
-      { name: 'Mintable', detected: false, severity: 'info' },
-      { name: 'Burnable', detected: false, severity: 'info' },
-      { name: 'Pausable', detected: false, severity: 'warning' },
-      { name: 'Blacklist', detected: false, severity: 'warning' },
-      { name: 'Permit (EIP-2612)', detected: true, severity: 'info' },
-      { name: 'Fee-on-Transfer', detected: false, severity: 'error' },
-      { name: 'Rebasing', detected: false, severity: 'error' },
-    ],
-    riskBreakdown: [
-      { dim: 'Decimal Handling', score: 20, max: 20 },
-      { dim: 'Token Features', score: 0, max: 25 },
-      { dim: 'Bytecode Complexity', score: 13, max: 20 },
-      { dim: 'Holder Concentration', score: 5, max: 15 },
-      { dim: 'Bridge Status', score: 5, max: 20 },
-    ],
-    issues: [
-      { severity: 'WARNING', msg: 'Decimal trimming required: 18 \u2192 8 decimals.' },
-      { severity: 'WARNING', msg: 'Proxy contract detected. Monitor for implementation upgrades.' },
-      { severity: 'INFO', msg: 'Wormhole Portal attestation exists. Consider NTT upgrade.' },
-    ],
-    verdict: 'AAVE is compatible with NTT migration. Proxy requires monitoring. Recommended mode: Locking.',
-  },
-  '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': {
-    name: 'Lido Staked ETH', symbol: 'stETH', chain: 'Ethereum',
-    address: '0xae7ab96520de3a18e5e111b5eaab095312d7fe84',
-    decimals: 18, totalSupply: '9,800,000', riskScore: 89, riskRating: 'High',
-    nttCompatible: false, nttMode: 'N/A',
-    bytecode: { sizeKb: 22.4, complexity: 'Complex', isProxy: true, hasSelfDestruct: false, hasDelegateCall: true },
-    capabilities: [
-      { name: 'Mintable', detected: true, severity: 'info' },
-      { name: 'Burnable', detected: true, severity: 'info' },
-      { name: 'Pausable', detected: true, severity: 'warning' },
-      { name: 'Blacklist', detected: false, severity: 'warning' },
-      { name: 'Permit (EIP-2612)', detected: true, severity: 'info' },
-      { name: 'Fee-on-Transfer', detected: false, severity: 'error' },
-      { name: 'Rebasing', detected: true, severity: 'error' },
-    ],
-    riskBreakdown: [
-      { dim: 'Decimal Handling', score: 20, max: 20 },
-      { dim: 'Token Features', score: 25, max: 25 },
-      { dim: 'Bytecode Complexity', score: 20, max: 20 },
-      { dim: 'Holder Concentration', score: 10, max: 15 },
-      { dim: 'Bridge Status', score: 15, max: 20 },
-    ],
-    issues: [
-      { severity: 'ERROR', msg: 'Rebasing token detected. Locked tokens will desync from minted supply. NTT incompatible.' },
-      { severity: 'ERROR', msg: 'Use wstETH (wrapped, non-rebasing) instead.' },
-      { severity: 'WARNING', msg: 'Pausable contract \u2014 bridge operations could be frozen.' },
-      { severity: 'WARNING', msg: 'High holder concentration: top 10 hold ~72%.' },
-    ],
-    verdict: 'stETH is NOT compatible with NTT migration due to rebasing. Use wstETH instead.',
-  },
-};
-
-const SYMBOL_MAP = {
-  ondo: '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3',
-  aave: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
-  steth: '0xae7ab96520de3a18e5e111b5eaab095312d7fe84',
-};
-
-function lookupResult(query) {
-  if (!query) return null;
-  const q = query.toLowerCase().trim();
-  if (MOCK_RESULTS[q]) return MOCK_RESULTS[q];
-  if (SYMBOL_MAP[q]) return MOCK_RESULTS[SYMBOL_MAP[q]];
-  for (const [addr, result] of Object.entries(MOCK_RESULTS)) {
-    if (addr.startsWith(q) || result.symbol.toLowerCase() === q) return result;
-  }
-  return null;
-}
-
-function RiskGauge({ score }) {
+function ReputationGauge({ score }) {
   const c = 2 * Math.PI * 45;
   const offset = c - (score / 100) * c;
-  const color = score <= 33 ? '#22c55e' : score <= 66 ? '#eab308' : '#ef4444';
+  // FLIPPED: high score = green (good), low score = red (rugger)
+  const color = score >= 70 ? '#22c55e' : score >= 30 ? '#eab308' : '#ef4444';
   return (
     <div className="relative w-28 h-28">
       <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
@@ -212,94 +68,85 @@ function RiskGauge({ score }) {
   );
 }
 
-// ---------- Download report ----------
+// ---------- Verdict Badge ----------
 
-function generateReport(result) {
-  const lines = [
-    `# Daybreak Migration Report`,
-    ``,
-    `## ${result.name} (${result.symbol})`,
-    ``,
-    `| Field | Value |`,
-    `|-------|-------|`,
-    `| Chain | ${result.chain} |`,
-    `| Address | \`${result.address}\` |`,
-    `| Decimals | ${result.decimals} |`,
-    `| Total Supply | ${result.totalSupply} |`,
-    `| Risk Score | ${result.riskScore}/100 (${result.riskRating}) |`,
-    `| NTT Compatible | ${result.nttCompatible ? 'Yes' : 'No'} |`,
-    `| NTT Mode | ${result.nttMode} |`,
-    ``,
-    `## Risk Breakdown`,
-    ``,
-    `| Dimension | Score | Max |`,
-    `|-----------|-------|-----|`,
-    ...result.riskBreakdown.map(d => `| ${d.dim} | ${d.score} | ${d.max} |`),
-    ``,
-    `## Capabilities`,
-    ``,
-    `| Capability | Detected | Severity |`,
-    `|-----------|----------|----------|`,
-    ...result.capabilities.map(c => `| ${c.name} | ${c.detected ? 'Yes' : 'No'} | ${c.severity} |`),
-    ``,
-    `## Bytecode Analysis`,
-    ``,
-    `- **Size:** ${result.bytecode.sizeKb} KB`,
-    `- **Complexity:** ${result.bytecode.complexity}`,
-    `- **Proxy:** ${result.bytecode.isProxy ? 'Yes' : 'No'}`,
-    `- **Selfdestruct:** ${result.bytecode.hasSelfDestruct ? 'Yes' : 'No'}`,
-    `- **Delegatecall:** ${result.bytecode.hasDelegateCall ? 'Yes' : 'No'}`,
-    ``,
-    `## Issues & Recommendations`,
-    ``,
-    ...result.issues.map(i => `- **[${i.severity}]** ${i.msg}`),
-    ``,
-    `## Verdict`,
-    ``,
-    result.verdict,
-    ``,
-    `---`,
-    ``,
-    `*Generated by [Daybreak](https://github.com/Jpatching/daybreak) | Built for Wormhole Sunrise*`,
-  ];
-  return lines.join('\n');
+function VerdictBadge({ verdict }) {
+  const config = {
+    CLEAN: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle2 },
+    SUSPICIOUS: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: AlertTriangle },
+    SERIAL_RUGGER: { bg: 'bg-red-500/20', text: 'text-red-400', icon: Skull },
+  };
+  const c = config[verdict] || config.SUSPICIOUS;
+  const Icon = c.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${c.bg} ${c.text}`}>
+      <Icon size={16} />
+      {verdict.replace('_', ' ')}
+    </span>
+  );
 }
 
-function downloadReport(result) {
-  const md = generateReport(result);
-  const blob = new Blob([md], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `daybreak-${result.symbol.toLowerCase()}-report.md`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+// ---------- Address truncation ----------
+
+function truncAddr(addr) {
+  if (!addr) return '...';
+  return addr.slice(0, 4) + '...' + addr.slice(-4);
 }
+
+function solscanUrl(addr) {
+  return `https://solscan.io/account/${addr}`;
+}
+
+// ---------- Error messages ----------
+
+const ERROR_MESSAGES = {
+  AUTH_REQUIRED: 'Please connect your wallet and sign in to scan.',
+  RATE_LIMITED: 'Rate limit exceeded. Max 10 scans per hour. Try again later.',
+  NOT_FOUND: 'Token not found. Make sure this is a valid Solana token address.',
+  SERVICE_UNAVAILABLE: 'Backend is temporarily unavailable. Try again in a moment.',
+};
 
 // ---------- Main ----------
 
 export default function ScannerPage() {
   const { address: urlAddress } = useParams();
   const navigate = useNavigate();
+  const { connected } = useWallet();
+  const { isAuthenticated, token, login, loading: authLoading, error: authError } = useAuth();
+
   const [query, setQuery] = useState(urlAddress || '');
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
-  const [chain, setChain] = useState('Ethereum');
+  const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const chains = ['Ethereum', 'Polygon', 'Arbitrum', 'BSC', 'Base', 'Optimism', 'Avalanche'];
 
+  // Auto-login when wallet connects
   useEffect(() => {
-    if (urlAddress) {
-      setScanning(true);
-      setResult(null);
-      setTimeout(() => {
-        setResult(lookupResult(urlAddress));
-        setScanning(false);
-      }, 1200);
+    if (connected && !isAuthenticated && !authLoading) {
+      login();
     }
-  }, [urlAddress]);
+  }, [connected, isAuthenticated, authLoading, login]);
+
+  // Scan when URL address changes
+  useEffect(() => {
+    if (urlAddress && isAuthenticated && token) {
+      doScan(urlAddress);
+    }
+  }, [urlAddress, isAuthenticated, token]);
+
+  async function doScan(address) {
+    setScanning(true);
+    setResult(null);
+    setError(null);
+    try {
+      const data = await scanToken(address, token);
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setScanning(false);
+    }
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -319,6 +166,7 @@ export default function ScannerPage() {
               <ArrowLeft size={16} />
               Home
             </a>
+            <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4 hover:!bg-amber-400" />
             <a
               href="https://github.com/Jpatching/daybreak"
               target="_blank"
@@ -326,16 +174,6 @@ export default function ScannerPage() {
               className="text-slate-400 hover:text-white transition-colors text-sm"
             >
               GitHub
-            </a>
-            <a
-              href="https://x.com/DaybreakScan"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-400 hover:text-white transition-colors"
-            >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
             </a>
           </div>
           <button
@@ -348,26 +186,13 @@ export default function ScannerPage() {
         {mobileMenuOpen && (
           <div className="sm:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
             <div className="px-6 py-4 flex flex-col gap-3">
-              <a href="/" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
-                Home
-              </a>
-              <a
-                href="https://github.com/Jpatching/daybreak"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-300 hover:text-white transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>Home</a>
+              <div className="py-2">
+                <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4" />
+              </div>
+              <a href="https://github.com/Jpatching/daybreak" target="_blank" rel="noopener noreferrer"
+                className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
                 GitHub
-              </a>
-              <a
-                href="https://x.com/DaybreakScan"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-300 hover:text-white transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                @DaybreakScan
               </a>
             </div>
           </div>
@@ -377,27 +202,27 @@ export default function ScannerPage() {
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-center mb-2" style={gradientTextStyle}>
-            Token Migration Scanner
+            Deployer Reputation Scanner
           </h1>
           <p className="text-slate-400 text-center mb-8">
-            Paste an ERC-20 address or token symbol to analyze migration readiness.
+            Paste a Solana token address to analyze the deployer's reputation.
           </p>
 
           {/* Search */}
-          <form onSubmit={handleSubmit} className="flex gap-3 mb-4">
+          <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="0x... or token symbol (ondo, aave, steth)"
+                placeholder="Solana token address..."
                 className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50 font-mono text-sm"
               />
             </div>
             <button
               type="submit"
-              disabled={scanning}
+              disabled={scanning || !isAuthenticated}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {scanning ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
@@ -405,44 +230,40 @@ export default function ScannerPage() {
             </button>
           </form>
 
-          {/* Chain pills */}
-          <div className="flex gap-2 mb-10 flex-wrap">
-            {chains.map((c) => (
-              <button
-                key={c}
-                onClick={() => setChain(c)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  chain === c ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-
-          {/* Demo tokens */}
-          {!result && !scanning && (
+          {/* Auth gate */}
+          {!connected && (
             <div className="text-center py-16">
-              <p className="text-slate-500 mb-6">Try these example tokens:</p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                {[
-                  { sym: 'ONDO', label: 'Low Risk', cls: 'text-green-400' },
-                  { sym: 'AAVE', label: 'Medium Risk', cls: 'text-yellow-400' },
-                  { sym: 'stETH', label: 'High Risk (Rebasing)', cls: 'text-red-400' },
-                ].map((t) => (
-                  <button
-                    key={t.sym}
-                    onClick={() => { setQuery(t.sym); navigate(`/scan/${t.sym}`); }}
-                    className="px-5 py-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors text-left flex items-center gap-3"
-                  >
-                    <TokenLogo symbol={t.sym} size={32} />
-                    <div>
-                      <div className="font-semibold text-white">{t.sym}</div>
-                      <div className={`text-xs ${t.cls}`}>{t.label}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400 mb-4">Connect your wallet to start scanning</p>
+              <p className="text-xs text-slate-600 mb-6">We verify wallet ownership via message signing. No transactions, no funds at risk.</p>
+              <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-base !h-12 !px-8 hover:!bg-amber-400 mx-auto" />
+            </div>
+          )}
+
+          {/* Auth loading */}
+          {connected && !isAuthenticated && authLoading && (
+            <div className="text-center py-16">
+              <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-4" />
+              <p className="text-slate-400">Authenticating wallet...</p>
+            </div>
+          )}
+
+          {/* Auth error */}
+          {authError && (
+            <div className="text-center py-8">
+              <p className="text-red-400 mb-4">{authError}</p>
+              <button onClick={login} className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg">
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Ready to scan (authenticated, no scan yet) */}
+          {isAuthenticated && !urlAddress && !scanning && !result && (
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
+              <p className="text-xs text-slate-600 mt-2">Works with any Pump.fun token</p>
             </div>
           )}
 
@@ -450,196 +271,246 @@ export default function ScannerPage() {
           {scanning && (
             <div className="text-center py-20">
               <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-4" />
-              <p className="text-slate-400">Analyzing bytecode, capabilities, and bridge status...</p>
+              <p className="text-slate-400">Scanning deployer history...</p>
+              <p className="text-xs text-slate-600 mt-2">This may take 5-15 seconds</p>
             </div>
           )}
 
-          {/* Not found */}
-          {!scanning && urlAddress && !result && (
+          {/* Error states */}
+          {error && !scanning && (
             <div className="text-center py-16">
-              <XCircle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 mb-2">Token not found in demo database</p>
-              <p className="text-xs text-slate-600">Demo supports: ONDO, AAVE, stETH. Install CLI for full scanning:</p>
-              <code className="text-xs text-amber-400 mt-2 block font-mono">cargo install daybreak</code>
+              <XCircle className="w-12 h-12 text-red-500/50 mx-auto mb-4" />
+              <p className="text-slate-400 mb-2">{ERROR_MESSAGES[error] || `Error: ${error}`}</p>
+              {error === 'AUTH_REQUIRED' && (
+                <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-10 !px-6 hover:!bg-amber-400 mx-auto mt-4" />
+              )}
             </div>
           )}
 
           {/* Results */}
           {result && !scanning && (
             <div className="space-y-6">
-              {/* Header card */}
+              {/* Token card */}
               <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between flex-wrap gap-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
-                      <TokenLogo symbol={result.symbol} size={36} />
-                      <h2 className="text-2xl font-bold text-white">{result.name}</h2>
-                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full font-medium">{result.symbol}</span>
-                      <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full">{result.chain}</span>
+                      <h2 className="text-2xl font-bold text-white">
+                        {result.token.name} ({result.token.symbol})
+                      </h2>
                     </div>
-                    <p className="text-xs text-slate-500 font-mono mb-4">{result.address}</p>
-                    <div className="grid grid-cols-3 gap-6">
-                      <div>
-                        <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Decimals</div>
-                        <div className="text-lg font-semibold text-white">{result.decimals}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Total Supply</div>
-                        <div className="text-lg font-semibold text-white">{result.totalSupply}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">NTT Mode</div>
-                        <div className="text-lg font-semibold text-amber-400">{result.nttMode}</div>
-                      </div>
-                    </div>
+                    <a
+                      href={solscanUrl(result.token.address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-slate-500 font-mono hover:text-amber-400 transition-colors inline-flex items-center gap-1"
+                    >
+                      {result.token.address}
+                      <ExternalLink size={10} />
+                    </a>
                   </div>
                   <div className="flex flex-col items-center">
-                    <RiskGauge score={result.riskScore} />
-                    <span className={`mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                      result.riskRating === 'Low' ? 'bg-green-500/20 text-green-400'
-                        : result.riskRating === 'Medium' ? 'bg-yellow-500/20 text-yellow-400'
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      {result.riskRating} Risk
-                    </span>
+                    <ReputationGauge score={result.deployer.reputation_score} />
+                    <VerdictBadge verdict={result.verdict} />
                   </div>
                 </div>
               </div>
 
-              {/* Two columns */}
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Capabilities */}
+              {/* Deployer stats */}
+              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Shield size={14} />
+                  Deployer
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Wallet</div>
+                    <a
+                      href={solscanUrl(result.deployer.wallet)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      {truncAddr(result.deployer.wallet)}
+                      <ExternalLink size={10} />
+                    </a>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Tokens Created</div>
+                    <div className="text-lg font-semibold text-white">{result.deployer.tokens_created}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Tokens Dead</div>
+                    <div className={`text-lg font-semibold ${result.deployer.tokens_dead > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {result.deployer.tokens_dead}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Rug Rate</div>
+                    <div className={`text-lg font-semibold ${
+                      result.deployer.rug_rate > 0.7 ? 'text-red-400'
+                        : result.deployer.rug_rate > 0.3 ? 'text-yellow-400'
+                        : 'text-green-400'
+                    }`}>
+                      {(result.deployer.rug_rate * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+                {(result.deployer.first_seen || result.deployer.last_seen) && (
+                  <div className="grid grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-700">
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">First Seen</div>
+                      <div className="text-sm text-slate-300">
+                        {result.deployer.first_seen ? new Date(result.deployer.first_seen).toLocaleDateString() : 'Unknown'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Last Seen</div>
+                      <div className="text-sm text-slate-300">
+                        {result.deployer.last_seen ? new Date(result.deployer.last_seen).toLocaleDateString() : 'Unknown'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Token list */}
+              {result.deployer.tokens && result.deployer.tokens.length > 0 && (
                 <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">Capabilities</h3>
-                  <div className="space-y-3">
-                    {result.capabilities.map((cap) => (
-                      <div key={cap.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {cap.detected ? (
-                            cap.severity === 'error' ? <XCircle size={16} className="text-red-400" />
-                              : cap.severity === 'warning' ? <AlertTriangle size={16} className="text-yellow-400" />
-                              : <CheckCircle2 size={16} className="text-green-400" />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full border border-slate-600" />
-                          )}
-                          <span className={`text-sm ${cap.detected ? 'text-white' : 'text-slate-600'}`}>{cap.name}</span>
-                        </div>
-                        <span className={`text-xs ${cap.detected ? 'text-white' : 'text-slate-700'}`}>
-                          {cap.detected ? 'Yes' : 'No'}
+                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <TrendingUp size={14} />
+                    Deployer's Tokens ({result.deployer.tokens.length})
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-700">
+                          <th className="text-left pb-3 pr-4">Token</th>
+                          <th className="text-left pb-3 pr-4">Symbol</th>
+                          <th className="text-left pb-3 pr-4">Status</th>
+                          <th className="text-right pb-3">Liquidity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.deployer.tokens.slice(0, 50).map((t) => (
+                          <tr key={t.address} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                            <td className="py-2 pr-4">
+                              <a
+                                href={solscanUrl(t.address)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-300 hover:text-amber-400 transition-colors font-mono text-xs inline-flex items-center gap-1"
+                              >
+                                {t.name || truncAddr(t.address)}
+                                <ExternalLink size={10} />
+                              </a>
+                            </td>
+                            <td className="py-2 pr-4 text-slate-400">{t.symbol || '???'}</td>
+                            <td className="py-2 pr-4">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                t.alive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {t.alive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                                {t.alive ? 'Alive' : 'Dead'}
+                              </span>
+                            </td>
+                            <td className="py-2 text-right font-mono text-xs text-slate-400">
+                              ${t.liquidity?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {result.deployer.tokens.length > 50 && (
+                      <p className="text-xs text-slate-600 mt-3">Showing 50 of {result.deployer.tokens.length} tokens</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Funding trace */}
+              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Users size={14} />
+                  Funding & Cluster
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Funding Source</div>
+                    {result.funding.source_wallet ? (
+                      <a
+                        href={solscanUrl(result.funding.source_wallet)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
+                      >
+                        {truncAddr(result.funding.source_wallet)}
+                        <ExternalLink size={10} />
+                      </a>
+                    ) : (
+                      <div className="text-sm text-slate-600">Unknown</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Other Deployers Funded</div>
+                    <div className={`text-lg font-semibold ${
+                      result.funding.other_deployers_funded > 3 ? 'text-red-400'
+                        : result.funding.other_deployers_funded > 0 ? 'text-yellow-400'
+                        : 'text-green-400'
+                    }`}>
+                      {result.funding.other_deployers_funded}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Cluster Tokens</div>
+                    <div className="text-lg font-semibold text-slate-300">
+                      {result.funding.cluster_total_tokens || 0}
+                      {result.funding.cluster_total_dead > 0 && (
+                        <span className="text-xs text-red-400 ml-2">
+                          ({result.funding.cluster_total_dead} dead)
                         </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Risk breakdown */}
-                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">Risk Breakdown</h3>
-                  <div className="space-y-4">
-                    {result.riskBreakdown.map((d) => (
-                      <div key={d.dim}>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm text-slate-300">{d.dim}</span>
-                          <span className="text-xs text-slate-500 font-mono">{d.score}/{d.max}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-1000 ${
-                              d.max === 0 ? 'bg-slate-600' : d.score / d.max <= 0.33 ? 'bg-green-500' : d.score / d.max <= 0.66 ? 'bg-yellow-500' : 'bg-red-500'
-                            }`}
-                            style={{ width: d.max === 0 ? '0%' : `${(d.score / d.max) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bytecode */}
-              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">Bytecode Analysis</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {[
-                    { label: 'Size', value: `${result.bytecode.sizeKb} KB` },
-                    { label: 'Complexity', value: result.bytecode.complexity },
-                    { label: 'Proxy', value: result.bytecode.isProxy ? 'Yes' : 'No', warn: result.bytecode.isProxy },
-                    { label: 'Selfdestruct', value: result.bytecode.hasSelfDestruct ? 'Yes' : 'No', warn: result.bytecode.hasSelfDestruct },
-                    { label: 'Delegatecall', value: result.bytecode.hasDelegateCall ? 'Yes' : 'No', warn: result.bytecode.hasDelegateCall },
-                  ].map((item) => (
-                    <div key={item.label}>
-                      <div className="text-xs text-slate-500 mb-1">{item.label}</div>
-                      <div className={`font-semibold ${item.warn ? 'text-yellow-400' : 'text-white'}`}>{item.value}</div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Issues */}
-              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">Issues & Recommendations</h3>
-                <div className="space-y-3">
-                  {result.issues.map((issue, i) => (
-                    <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${
-                      issue.severity === 'ERROR' ? 'bg-red-500/5 border-red-500/20'
-                        : issue.severity === 'WARNING' ? 'bg-yellow-500/5 border-yellow-500/20'
-                        : 'bg-blue-500/5 border-blue-500/20'
-                    }`}>
-                      {issue.severity === 'ERROR' ? <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-                        : issue.severity === 'WARNING' ? <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                        : <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />}
-                      <p className="text-sm text-slate-300">{issue.msg}</p>
-                    </div>
-                  ))}
+                  </div>
                 </div>
               </div>
 
               {/* Verdict */}
               <div className={`p-6 rounded-xl border ${
-                result.nttCompatible ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'
+                result.verdict === 'CLEAN' ? 'bg-green-500/5 border-green-500/20'
+                  : result.verdict === 'SUSPICIOUS' ? 'bg-yellow-500/5 border-yellow-500/20'
+                  : 'bg-red-500/5 border-red-500/20'
               }`}>
                 <div className="flex items-start gap-3">
-                  {result.nttCompatible
+                  {result.verdict === 'CLEAN'
                     ? <CheckCircle2 size={24} className="text-green-400 flex-shrink-0 mt-0.5" />
-                    : <XCircle size={24} className="text-red-400 flex-shrink-0 mt-0.5" />}
+                    : result.verdict === 'SUSPICIOUS'
+                    ? <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                    : <Skull size={24} className="text-red-400 flex-shrink-0 mt-0.5" />}
                   <div>
-                    <h3 className={`font-semibold mb-1 ${result.nttCompatible ? 'text-green-400' : 'text-red-400'}`}>
-                      {result.nttCompatible ? 'NTT Migration Compatible' : 'NTT Migration Incompatible'}
+                    <h3 className={`font-semibold mb-1 ${
+                      result.verdict === 'CLEAN' ? 'text-green-400'
+                        : result.verdict === 'SUSPICIOUS' ? 'text-yellow-400'
+                        : 'text-red-400'
+                    }`}>
+                      {result.verdict === 'CLEAN' ? 'Clean Deployer'
+                        : result.verdict === 'SUSPICIOUS' ? 'Suspicious Deployer'
+                        : 'Serial Rugger Detected'}
                     </h3>
-                    <p className="text-sm text-slate-400">{result.verdict}</p>
+                    <p className="text-sm text-slate-400">
+                      {result.verdict === 'CLEAN'
+                        ? `This deployer has a ${(result.deployer.rug_rate * 100).toFixed(1)}% rug rate with a reputation score of ${result.deployer.reputation_score}/100. Relatively safe.`
+                        : result.verdict === 'SUSPICIOUS'
+                        ? `This deployer has a ${(result.deployer.rug_rate * 100).toFixed(1)}% rug rate. Exercise caution before investing.`
+                        : `This deployer has rugged ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${(result.deployer.rug_rate * 100).toFixed(1)}%). Do NOT invest.`}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => downloadReport(result)}
-                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download size={18} />
-                  Download Report
-                </button>
-                <button
-                  onClick={() => {
-                    const cmds = [
-                      `# Install Daybreak`,
-                      `cargo install --path .`,
-                      ``,
-                      `# Scan this token`,
-                      `daybreak scan ${result.address}`,
-                      ``,
-                      `# Generate full report`,
-                      `daybreak report ${result.address} --output ./report`,
-                      result.nttCompatible ? `\n# Migrate (requires Solana keypair)\ndaybreak migrate ${result.address} --keypair ~/wallet.json` : `# Not eligible for migration`,
-                    ].join('\n');
-                    navigator.clipboard.writeText(cmds);
-                  }}
-                  className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <Terminal size={18} />
-                  Copy CLI Commands
-                </button>
+              {/* Scanned at */}
+              <div className="text-center text-xs text-slate-600">
+                Scanned at {new Date(result.scanned_at).toLocaleString()}
               </div>
             </div>
           )}
