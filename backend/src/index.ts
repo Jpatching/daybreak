@@ -17,6 +17,9 @@ import { requireAuth } from './middleware/auth';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// Trust Nginx reverse proxy (required for express-rate-limit + X-Forwarded-For)
+app.set('trust proxy', 1);
+
 // Parse JSON bodies (needed for POST /auth/verify)
 app.use(express.json());
 
