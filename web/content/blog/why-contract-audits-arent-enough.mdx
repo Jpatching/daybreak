@@ -1,0 +1,74 @@
+# Why Contract Audits Aren't Enough — The Case for Deployer History
+
+In traditional DeFi, a contract audit is the gold standard of security. Auditors review the smart contract code for vulnerabilities, logic errors, and attack vectors. But on Solana — particularly in the memecoin ecosystem — this model breaks down.
+
+## The Audit Assumption
+
+The conventional wisdom is straightforward: if the contract code is safe, the token is safe. Audited contracts have verified logic, no backdoors, and predictable behavior.
+
+This assumption works well for complex DeFi protocols with custom smart contracts. But it fails for the vast majority of tokens launched on platforms like Pump.fun.
+
+## What Audits Miss
+
+### 1. Standard Contracts, Different Intentions
+
+Pump.fun tokens use the same standard token program. There's nothing to audit — the contract code is identical across all tokens. The risk isn't in the code. It's in the deployer's behavior.
+
+A serial rugger and a legitimate project founder can deploy tokens using exactly the same contract. The code doesn't tell you which one you're dealing with.
+
+### 2. Off-Chain Behavior
+
+Audits examine on-chain code, but rug pulls often involve off-chain coordination:
+- Social media manipulation to drive buying pressure
+- Coordinated selling across multiple wallets
+- Creating artificial momentum through bundled transactions
+
+### 3. Deployer Pattern Blindness
+
+An audit looks at a single contract in isolation. It doesn't ask: "What else has this deployer done?" A deployer who has created 100 tokens with a 90% death rate is almost certainly going to rug again — no audit can detect this from the contract code alone.
+
+## Deployer Patterns Across Tokens
+
+When you zoom out from individual tokens to deployer-level analysis, clear patterns emerge:
+
+- **Volume deployers** create 10+ tokens per day, knowing most will die. They profit from the few that get brief traction.
+- **Cluster operators** use multiple wallets funded from the same source, making each deployer look independent.
+- **Burner wallet users** create a fresh wallet for each batch of tokens, abandoning old wallets once their death rate gets too high.
+
+These patterns are only visible through deployer history analysis.
+
+## Cluster Networks
+
+Perhaps the most concerning pattern is cluster networks. Here's how they work:
+
+1. A central funder wallet holds SOL
+2. The funder distributes SOL to multiple fresh wallets
+3. Each wallet deploys tokens independently
+4. When one wallet's reputation gets too bad, they fund a new one
+
+Daybreak's cluster analysis traces these funding connections, revealing that seemingly independent deployers are often part of the same operation.
+
+## Behavioral Signals
+
+Beyond death rate and cluster analysis, several behavioral signals indicate risk:
+
+- **Deploy velocity** — Creating more than 5 tokens per day suggests a carpet-bombing approach
+- **Deployer holdings** — Still holding a large percentage of supply suggests an exit is planned
+- **SOL balance** — A near-zero balance after deployment suggests the deployer has moved funds elsewhere
+- **Account age** — Recently created wallets deploying tokens are more likely to be disposable
+
+## A Complementary Approach
+
+Contract audits and deployer reputation analysis aren't competing tools — they're complementary:
+
+| Aspect | Contract Audit | Deployer Reputation |
+|--------|---------------|-------------------|
+| What it checks | Code quality, vulnerabilities | Deployer behavior, history |
+| Time scope | Current contract | Deployer's full history |
+| Network scope | Single contract | Cross-token, cross-wallet |
+| Best for | Complex DeFi protocols | Memecoins, Pump.fun tokens |
+| Limitations | Can't detect behavioral intent | Can't verify code safety |
+
+## Conclusion
+
+In a world where most Solana tokens share the same contract code, the contract isn't what differentiates a legitimate project from a scam. The deployer's track record is. Check both, but don't assume a clean contract means a clean deployer.

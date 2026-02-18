@@ -22,7 +22,7 @@
 }
 
 pre code {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-family: var(--font-jetbrains), 'Fira Code', 'Monaco', 'Consolas', monospace;
 }
 
 html {

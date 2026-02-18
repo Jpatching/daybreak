@@ -1,0 +1,65 @@
+# What Is Deployer Reputation and Why It Matters
+
+When evaluating a new token, most traders look at the token itself — its liquidity, volume, holder count, and contract code. But there's a far more predictive signal hiding in plain sight: **the deployer's history**.
+
+## Beyond Contract Audits
+
+A contract audit tells you whether the code has known vulnerabilities. But on Solana — especially with Pump.fun tokens — most tokens use identical, well-known contract code. The contract isn't the attack vector. The deployer is.
+
+A serial rugger can deploy 200 tokens using perfectly safe contract code. Each individual token looks fine. But zoom out and look at the deployer's track record, and the pattern becomes obvious.
+
+## What Deployer History Reveals
+
+By scanning a deployer wallet's full transaction history, Daybreak extracts:
+
+- **Total tokens created** — How many tokens this wallet has deployed.
+- **Dead tokens** — How many of those tokens have no remaining liquidity.
+- **Death rate** — Dead tokens divided by total tokens. This is the single most predictive metric.
+- **First and last activity** — When the deployer was first active and when they most recently deployed.
+- **Deploy velocity** — How quickly they create new tokens. More than 5 per day is a red flag.
+
+## Scoring Methodology
+
+Daybreak's reputation score is a 0-100 composite:
+
+| Component | Weight | What it measures |
+|-----------|--------|-----------------|
+| Death rate | 40% | Percentage of dead tokens |
+| Token count | 20% | Penalty for high-volume deployers |
+| Lifespan | 20% | Average token survival time |
+| Cluster size | 20% | Connected deployers via shared funding |
+
+Additional penalties are applied for:
+- Active mint authority (-10 points)
+- Active freeze authority (-5 points)
+- Deployer holdings above 50% (-10 points)
+- Deploy velocity above 5/day (-10 points)
+- Bundle detection (-5 points)
+
+## CLEAN vs SUSPICIOUS vs SERIAL_RUGGER
+
+- **CLEAN (70-100)** — Low death rate, reasonable token count, no cluster connections. Relatively safe.
+- **SUSPICIOUS (30-70)** — Elevated death rate or concerning patterns. Proceed with caution.
+- **SERIAL_RUGGER (0-30)** — High death rate, typically with cluster connections. Strong evidence of serial rug behavior.
+
+## Funding Cluster Analysis
+
+One of Daybreak's most powerful features is cluster analysis. Here's how it works:
+
+1. **Find the funding source** — Trace the deployer's earliest incoming SOL transfer.
+2. **Scan the funder's outgoing transfers** — Check who else the funder has sent SOL to.
+3. **Check recipients for Pump.fun activity** — If the funder has also funded other Pump.fun deployers, this suggests a coordinated rug network.
+
+Cluster analysis reveals that many seemingly independent deployers are actually controlled by the same entity, using fresh wallets for each batch of tokens.
+
+## Real-World Examples
+
+In testing, Daybreak has identified deployers with:
+- 194 tokens created, 157 dead (80.9% death rate) — scored 8/100, SERIAL_RUGGER
+- Connected to 12 other deployers through shared funding — a full rug network
+
+These patterns are invisible when looking at any single token but become obvious through deployer reputation analysis.
+
+## Conclusion
+
+Deployer reputation doesn't replace other forms of analysis — it complements them. Check the token's fundamentals, but also check who built it and what they've built before.

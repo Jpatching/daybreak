@@ -1,9 +1,12 @@
+'use client';
+
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import SunriseShader from '../components/SunriseShader';
-import { fetchStats } from '../api';
+import { fetchStats } from '@/lib/api';
 import {
   Shield,
   Search,
@@ -28,8 +31,6 @@ import {
   Cpu,
   Rocket,
   Scale,
-  Menu,
-  X,
   Skull,
   TrendingUp,
   Users,
@@ -38,18 +39,9 @@ import {
 } from 'lucide-react';
 import { SiSolana } from '@icons-pack/react-simple-icons';
 
-// ---------- Branding SVG components ----------
+const SunriseShader = dynamic(() => import('./SunriseShader'), { ssr: false });
 
-function DaybreakLogo({ size = 28 }) {
-  return (
-    <img
-      src="/daybreak-logo-square.png"
-      alt="Daybreak"
-      style={{ width: size, height: size }}
-      className="object-contain rounded-lg"
-    />
-  );
-}
+// ---------- Branding SVG components ----------
 
 function PumpFunIcon({ size = 28 }) {
   return (
@@ -71,14 +63,6 @@ function HeliusIcon({ size = 28 }) {
         </linearGradient>
       </defs>
       <circle cx="20" cy="20" r="10" fill="url(#hel-g)" />
-    </svg>
-  );
-}
-
-function XIcon({ size = 20, className = '' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
     </svg>
   );
 }
@@ -458,123 +442,54 @@ function BentoFeaturesSection() {
 // ---------- Live Stats ----------
 
 function LiveStats() {
-  const [stats, setStats] = useState(null);
+  const [liveStats, setLiveStats] = useState(null);
 
   useEffect(() => {
-    fetchStats().then(data => { if (data) setStats(data); }).catch(() => {});
+    fetchStats().then(data => { if (data) setLiveStats(data); }).catch(() => {});
   }, []);
 
-  if (!stats || stats.total_scans === 0) return null;
+  if (!liveStats || liveStats.total_scans === 0) return null;
 
   const fmt = (n) => new Intl.NumberFormat().format(n);
 
   return (
     <div className="flex flex-wrap justify-center gap-6 mt-8">
       <div className="text-center">
-        <div className="text-2xl font-bold text-amber-400">{fmt(stats.total_scans)}</div>
+        <div className="text-2xl font-bold text-amber-400">{fmt(liveStats.total_scans)}</div>
         <div className="text-xs text-slate-500">Scans Completed</div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-bold text-green-400">{fmt(stats.verdicts.CLEAN)}</div>
+        <div className="text-2xl font-bold text-green-400">{fmt(liveStats.verdicts.CLEAN)}</div>
         <div className="text-xs text-slate-500">Clean</div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-bold text-yellow-400">{fmt(stats.verdicts.SUSPICIOUS)}</div>
+        <div className="text-2xl font-bold text-yellow-400">{fmt(liveStats.verdicts.SUSPICIOUS)}</div>
         <div className="text-xs text-slate-500">Suspicious</div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-bold text-red-400">{fmt(stats.verdicts.SERIAL_RUGGER)}</div>
+        <div className="text-2xl font-bold text-red-400">{fmt(liveStats.verdicts.SERIAL_RUGGER)}</div>
         <div className="text-xs text-slate-500">Serial Ruggers</div>
       </div>
     </div>
   );
 }
 
-// ---------- Main Page ----------
+// ---------- Main Content ----------
 
-export default function LandingPage() {
-  const navigate = useNavigate();
+export default function LandingContent() {
+  const router = useRouter();
   const { connected } = useWallet();
   const [address, setAddress] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleScan = (e) => {
     e.preventDefault();
-    if (address.trim()) navigate(`/scan/${address.trim()}`);
+    if (address.trim()) router.push(`/scan/${address.trim()}`);
   };
 
   return (
     <div className="min-h-screen relative">
       <SunriseShader />
       <div className="fixed inset-0 z-[1] pointer-events-none bg-gradient-to-b from-slate-900/40 via-slate-900/30 to-slate-900/70" />
-
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-black/70 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <DaybreakLogo size={44} />
-          </div>
-          <div className="hidden md:flex items-center gap-5">
-            <a href="/scan" className="text-slate-400 hover:text-white transition-colors text-sm">Scanner</a>
-            <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4 hover:!bg-amber-400" />
-            <a
-              href="https://github.com/Jpatching/daybreak"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-400 hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
-              </svg>
-            </a>
-            <a
-              href="https://x.com/DaybreakScan"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-400 hover:text-white transition-colors"
-            >
-              <XIcon size={20} />
-            </a>
-          </div>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden text-slate-300 hover:text-white transition-colors"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
-            <div className="px-6 py-4 flex flex-col gap-3">
-              <a href="/scan" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
-                Scanner
-              </a>
-              <div className="py-2">
-                <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4" />
-              </div>
-              <a
-                href="https://github.com/Jpatching/daybreak"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-300 hover:text-white transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                GitHub
-              </a>
-              <a
-                href="https://x.com/DaybreakScan"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-300 hover:text-white transition-colors py-2 flex items-center gap-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <XIcon size={16} /> @DaybreakScan
-              </a>
-            </div>
-          </div>
-        )}
-      </nav>
 
       {/* Hero */}
       <section className="pt-28 pb-16 px-6 relative z-10">
@@ -800,12 +715,12 @@ export default function LandingPage() {
             Daybreak is free, open source, and built for Solana.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
+            <Link
               href="/scan"
               className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors"
             >
               Launch Scanner
-            </a>
+            </Link>
             <a
               href="https://github.com/Jpatching/daybreak"
               target="_blank"
@@ -817,29 +732,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-8 px-6 border-t border-white/5 relative z-10 bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <DaybreakLogo size={20} />
-            <span className="text-slate-500 text-sm">Solana Deployer Reputation</span>
-          </div>
-          <div className="flex items-center gap-6 text-slate-400 text-sm flex-wrap justify-center">
-            <a href="/scan" className="hover:text-white transition-colors">Scanner</a>
-            <a href="https://github.com/Jpatching/daybreak" className="hover:text-white transition-colors">GitHub</a>
-            <a href="https://x.com/DaybreakScan" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
-              <XIcon size={14} />
-              Twitter
-            </a>
-            <a href="https://solana.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
-              <SiSolana size={14} />
-              Solana
-            </a>
-            <span>MIT License</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

@@ -1,12 +1,16 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import bs58 from 'bs58';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
 export default function useAuth() {
   const { publicKey, signMessage, connected, disconnect } = useWallet();
-  const [token, setToken] = useState(() => sessionStorage.getItem('daybreak_token'));
+  const [token, setToken] = useState(() =>
+    typeof window !== 'undefined' ? sessionStorage.getItem('daybreak_token') : null
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(!!token);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,7 +20,9 @@ export default function useAuth() {
     if (!connected) {
       setToken(null);
       setIsAuthenticated(false);
-      sessionStorage.removeItem('daybreak_token');
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('daybreak_token');
+      }
     }
   }, [connected]);
 

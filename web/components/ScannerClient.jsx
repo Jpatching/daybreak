@@ -1,19 +1,18 @@
+'use client';
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import useAuth from '../hooks/useAuth';
-import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, PaymentRequiredError } from '../api';
+import useAuth from '@/hooks/useAuth';
+import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, PaymentRequiredError } from '@/lib/api';
 import {
   Search,
-  ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   XCircle,
   Shield,
   Loader2,
-  Menu,
-  X,
   Wallet,
   Skull,
   Users,
@@ -31,19 +30,6 @@ import {
   Unlock,
   DollarSign,
 } from 'lucide-react';
-
-// ---------- Branding ----------
-
-function DaybreakLogo({ size = 28 }) {
-  return (
-    <img
-      src="/daybreak-logo-square.png"
-      alt="Daybreak"
-      style={{ width: size, height: size }}
-      className="object-contain rounded-lg"
-    />
-  );
-}
 
 // ---------- Gradient ----------
 
@@ -186,7 +172,6 @@ function ScoreBreakdownCard({ breakdown }) {
 function PaymentPrompt({ paymentInfo, onPay, paying }) {
   if (!paymentInfo) return null;
 
-  // Guest limit reached — show connect wallet prompt
   if (paymentInfo.guestLimitReached) {
     return (
       <div className="text-center py-10">
@@ -237,7 +222,7 @@ function PaymentPrompt({ paymentInfo, onPay, paying }) {
   );
 }
 
-// ---------- Address truncation ----------
+// ---------- Helpers ----------
 
 function truncAddr(addr) {
   if (!addr) return '...';
@@ -248,16 +233,12 @@ function solscanUrl(addr) {
   return `https://solscan.io/account/${addr}`;
 }
 
-// ---------- Error messages ----------
-
 const ERROR_MESSAGES = {
   AUTH_REQUIRED: 'Please connect your wallet and sign in to scan.',
   RATE_LIMITED: 'Daily scan limit reached. You get 3 free scans per day.',
   NOT_FOUND: 'Token not found. Make sure this is a valid Solana token address.',
   SERVICE_UNAVAILABLE: 'Backend is temporarily unavailable. Try again in a moment.',
 };
-
-// ---------- Scan progress steps ----------
 
 const SCAN_STEPS = [
   'Resolving token metadata...',
@@ -270,22 +251,20 @@ const SCAN_STEPS = [
 
 // ---------- Main ----------
 
-export default function ScannerPage() {
-  const { address: urlAddress } = useParams();
-  const navigate = useNavigate();
+export default function ScannerClient({ initialAddress }) {
+  const router = useRouter();
   const { connected, publicKey, signMessage } = useWallet();
   const { isAuthenticated, token, login, loading: authLoading, error: authError } = useAuth();
 
-  const [query, setQuery] = useState(urlAddress || '');
+  const [query, setQuery] = useState(initialAddress || '');
   const [scanning, setScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [usage, setUsage] = useState(null);
 
   // x402 payment state
-  const [paymentInfo, setPaymentInfo] = useState(null); // { priceUsd, details, address }
+  const [paymentInfo, setPaymentInfo] = useState(null);
   const [paying, setPaying] = useState(false);
 
   // Fetch usage on auth
@@ -312,12 +291,12 @@ export default function ScannerPage() {
     }
   }, [connected, isAuthenticated, authLoading, login]);
 
-  // Scan when URL address changes (works for both guest and auth)
+  // Scan when initialAddress changes
   useEffect(() => {
-    if (urlAddress) {
-      doScan(urlAddress);
+    if (initialAddress) {
+      doScan(initialAddress);
     }
-  }, [urlAddress, isAuthenticated, token]);
+  }, [initialAddress, isAuthenticated, token]);
 
   async function doScan(address) {
     setScanning(true);
@@ -326,7 +305,6 @@ export default function ScannerPage() {
     setPaymentInfo(null);
     setScanStep(0);
 
-    // Animate progress steps
     const stepInterval = setInterval(() => {
       setScanStep(prev => (prev < SCAN_STEPS.length - 1 ? prev + 1 : prev));
     }, 2500);
@@ -334,13 +312,10 @@ export default function ScannerPage() {
     try {
       let data;
       if (isAuthenticated && token) {
-        // Authenticated scan (3/day)
         data = await scanToken(address, token);
       } else {
-        // Guest scan (1/day)
         data = await guestScanToken(address);
         if (data.guestLimitReached) {
-          // Show connect wallet prompt instead of payment
           setPaymentInfo({
             guestLimitReached: true,
             priceUsd: data.price_usd || 0.01,
@@ -351,11 +326,6 @@ export default function ScannerPage() {
         }
       }
       setResult(data);
-      // Update document title with verdict
-      if (data.verdict && data.token?.symbol) {
-        document.title = `${data.token.symbol} — ${data.verdict} | Daybreak`;
-      }
-      // Update usage from scan response
       if (data.usage) setUsage(data.usage);
     } catch (err) {
       if (err instanceof PaymentRequiredError) {
@@ -391,7 +361,6 @@ export default function ScannerPage() {
         .map(b => b.toString(16).padStart(2, '0')).join('');
       const timestamp = Math.floor(Date.now() / 1000);
 
-      // Build the message to sign (must match server's expected format)
       const message = JSON.stringify({
         scheme: option.scheme,
         network: option.network,
@@ -403,15 +372,12 @@ export default function ScannerPage() {
         validUntil: option.validUntil ?? timestamp + 300,
       });
 
-      // SHA-256 hash of the message
       const messageBytes = new TextEncoder().encode(message);
       const hashBuffer = await crypto.subtle.digest('SHA-256', messageBytes);
       const hashArray = new Uint8Array(hashBuffer);
 
-      // Sign with wallet adapter (Ed25519)
       const signatureBytes = await signMessage(hashArray);
 
-      // Encode as base58
       const bs58Module = await import('bs58');
       const signature = bs58Module.default.encode(signatureBytes);
 
@@ -425,7 +391,6 @@ export default function ScannerPage() {
 
       const paymentHeader = btoa(JSON.stringify(payload));
 
-      // Run the scan with payment
       setScanning(true);
       setScanStep(0);
       const stepInterval = setInterval(() => {
@@ -450,62 +415,13 @@ export default function ScannerPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (query.trim()) navigate(`/scan/${query.trim()}`);
+    if (query.trim()) router.push(`/scan/${query.trim()}`);
   };
 
-  // Allow scan for everyone (guest or authenticated)
   const canScan = !scanning;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-black/90 backdrop-blur-sm border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <a href="/" className="flex items-center">
-            <DaybreakLogo size={44} />
-          </a>
-          <div className="hidden sm:flex items-center gap-4">
-            <a href="/" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm">
-              <ArrowLeft size={16} />
-              Home
-            </a>
-            <a href="/profile" className="text-slate-400 hover:text-white transition-colors text-sm">
-              Profile
-            </a>
-            <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4 hover:!bg-amber-400" />
-            <a
-              href="https://github.com/Jpatching/daybreak"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-400 hover:text-white transition-colors text-sm"
-            >
-              GitHub
-            </a>
-          </div>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="sm:hidden text-slate-300 hover:text-white transition-colors"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-        {mobileMenuOpen && (
-          <div className="sm:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
-            <div className="px-6 py-4 flex flex-col gap-3">
-              <a href="/" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>Home</a>
-              <a href="/profile" className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>Profile</a>
-              <div className="py-2">
-                <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-sm !h-9 !px-4" />
-              </div>
-              <a href="https://github.com/Jpatching/daybreak" target="_blank" rel="noopener noreferrer"
-                className="text-slate-300 hover:text-white transition-colors py-2" onClick={() => setMobileMenuOpen(false)}>
-                GitHub
-              </a>
-            </div>
-          </div>
-        )}
-      </nav>
-
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-center mb-2" style={gradientTextStyle}>
@@ -515,14 +431,12 @@ export default function ScannerPage() {
             Paste a Solana token address to analyze the deployer's reputation.
           </p>
 
-          {/* Usage bar — always visible when authenticated */}
           {isAuthenticated && usage && (
             <div className="mb-6">
               <UsageBadge usage={usage} />
             </div>
           )}
 
-          {/* Search */}
           <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
@@ -544,7 +458,6 @@ export default function ScannerPage() {
             </button>
           </form>
 
-          {/* Auth loading */}
           {connected && !isAuthenticated && authLoading && (
             <div className="text-center py-4">
               <Loader2 className="w-6 h-6 animate-spin text-amber-400 mx-auto mb-2" />
@@ -552,7 +465,6 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Auth error */}
           {authError && (
             <div className="text-center py-4">
               <p className="text-red-400 text-sm mb-2">{authError}</p>
@@ -562,8 +474,7 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Guest notice */}
-          {!connected && !scanning && !result && !paymentInfo && !urlAddress && (
+          {!connected && !scanning && !result && !paymentInfo && !initialAddress && (
             <div className="text-center py-16">
               <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
@@ -571,8 +482,7 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Ready to scan (authenticated, no scan yet) */}
-          {isAuthenticated && !urlAddress && !scanning && !result && !paymentInfo && (
+          {isAuthenticated && !initialAddress && !scanning && !result && !paymentInfo && (
             <div className="text-center py-16">
               <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
@@ -580,7 +490,6 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Loading with progress steps */}
           {scanning && (
             <div className="text-center py-16">
               <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-6" />
@@ -603,7 +512,6 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Payment prompt (402) */}
           {paymentInfo && !scanning && !result && (
             <PaymentPrompt
               paymentInfo={paymentInfo}
@@ -612,7 +520,6 @@ export default function ScannerPage() {
             />
           )}
 
-          {/* Error states */}
           {error && !scanning && !paymentInfo && (
             <div className="text-center py-16">
               <XCircle className="w-12 h-12 text-red-500/50 mx-auto mb-4" />
@@ -628,7 +535,6 @@ export default function ScannerPage() {
             </div>
           )}
 
-          {/* Results */}
           {result && !scanning && (
             <div className="space-y-6">
               {/* Token card + market data */}
@@ -658,7 +564,6 @@ export default function ScannerPage() {
                       {result.token.address}
                       <ExternalLink size={10} />
                     </a>
-                    {/* Market data row */}
                     {result.market_data && (
                       <div className="flex flex-wrap gap-4 mt-3">
                         {result.market_data.price_usd != null && (
@@ -695,7 +600,6 @@ export default function ScannerPage() {
                         )}
                       </div>
                     )}
-                    {/* Socials */}
                     {result.market_data?.socials && (
                       <div className="flex gap-3 mt-2">
                         {result.market_data.socials.website && (
@@ -953,7 +857,6 @@ export default function ScannerPage() {
                 </div>
               )}
 
-              {/* Score Breakdown */}
               <ScoreBreakdownCard breakdown={result.score_breakdown} />
 
               {/* Token list */}
@@ -1163,7 +1066,6 @@ export default function ScannerPage() {
                     </div>
                   </div>
                 </div>
-                {/* Evidence links — always show deployer link */}
                 <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-700">
                   <a
                     href={result.evidence?.deployer_url || solscanUrl(result.deployer.wallet)}
@@ -1196,7 +1098,6 @@ export default function ScannerPage() {
                 </div>
               </div>
 
-              {/* Scanned at */}
               <div className="text-center text-xs text-slate-600">
                 Scanned at {new Date(result.scanned_at).toLocaleString()}
               </div>
