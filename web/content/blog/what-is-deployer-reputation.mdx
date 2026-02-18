@@ -1,65 +1,122 @@
 # What Is Deployer Reputation and Why It Matters
 
-When evaluating a new token, most traders look at the token itself — its liquidity, volume, holder count, and contract code. But there's a far more predictive signal hiding in plain sight: **the deployer's history**.
+When you find a new Solana token on DexScreener or Birdeye, what do you check first? Most traders look at the token — its liquidity, volume, holder count, price chart, and maybe whether it's been flagged by RugCheck. But there's a far more predictive signal hiding in plain sight: **the deployer's track record**.
 
-## Beyond Contract Audits
+Every token on Solana was created by a specific wallet address. That wallet's entire history is permanently recorded on-chain. And when you look at that history — how many tokens they've created, how many survived, how they were funded, who else shares their funding source — patterns emerge that are invisible at the token level.
 
-A contract audit tells you whether the code has known vulnerabilities. But on Solana — especially with Pump.fun tokens — most tokens use identical, well-known contract code. The contract isn't the attack vector. The deployer is.
+This is deployer reputation, and it's the foundation of how [DaybreakScan](https://www.daybreakscan.com) evaluates token safety.
 
-A serial rugger can deploy 200 tokens using perfectly safe contract code. Each individual token looks fine. But zoom out and look at the deployer's track record, and the pattern becomes obvious.
+## The Problem With Token-Level Analysis
+
+Traditional rug pull detection tools analyze individual tokens. They check whether mint authority is revoked, whether freeze authority is active, what the top holder concentration looks like, and whether the contract has suspicious functions. These are useful checks, and you should absolutely run them.
+
+But here's the fundamental problem: **a serial rugger's 200th token looks identical to a legitimate project at the contract level.**
+
+On Solana — especially with Pump.fun tokens — virtually every token uses the same standard token program. There's no custom smart contract to audit. The contract code is identical across millions of tokens. The attack vector isn't the code. It's the deployer.
+
+A deployer we identified during testing had created **194 tokens**. Of those, **157 were dead** — zero liquidity, zero trading activity. That's an **80.9% death rate**. They scored **8 out of 100** on Daybreak's reputation scale and were classified as a **SERIAL_RUGGER**.
+
+Yet each individual token they launched would have passed a standard rug check. Mint authority? Revoked. Freeze authority? Revoked. Liquidity? Present at launch. The contract was clean. The deployer was not.
 
 ## What Deployer History Reveals
 
-By scanning a deployer wallet's full transaction history, Daybreak extracts:
+When Daybreak scans a deployer wallet, it extracts five core metrics from their on-chain history:
 
-- **Total tokens created** — How many tokens this wallet has deployed.
-- **Dead tokens** — How many of those tokens have no remaining liquidity.
-- **Death rate** — Dead tokens divided by total tokens. This is the single most predictive metric.
-- **First and last activity** — When the deployer was first active and when they most recently deployed.
-- **Deploy velocity** — How quickly they create new tokens. More than 5 per day is a red flag.
+**Total tokens created** — How many tokens this wallet has deployed. A wallet that has created 3 tokens is fundamentally different from one that has created 150. High volume deployment is a hallmark of serial rug operations.
 
-## Scoring Methodology
+**Dead tokens** — How many of the deployer's tokens have no remaining liquidity. A "dead" token is one where the Raydium or Pump.fun liquidity pool has been drained or the token never graduated from the bonding curve at all.
 
-Daybreak's reputation score is a 0-100 composite:
+**Death rate** — Dead tokens divided by total tokens. This is the single most predictive metric in our scoring system, weighted at 40% of the total score. A death rate above 50% is concerning. Above 80% is near-certain evidence of a serial rug pattern.
 
-| Component | Weight | What it measures |
+**Deploy velocity** — How many tokens the deployer creates per day on average. Legitimate project founders create tokens occasionally — maybe one every few weeks or months. Serial ruggers operate on volume, sometimes deploying 5, 10, or 20 tokens daily. Each token is a low-effort lottery ticket: hype it briefly, sell if it gets traction, abandon it if it doesn't.
+
+**Activity timeline** — When the deployer was first active and when they most recently deployed. A wallet that has been deploying tokens steadily for months with a high death rate tells a different story than a new wallet with one or two tokens.
+
+## How the Scoring Works
+
+Daybreak's reputation score is a 0-100 composite built from four weighted components:
+
+| Component | Weight | What It Measures |
 |-----------|--------|-----------------|
-| Death rate | 40% | Percentage of dead tokens |
-| Token count | 20% | Penalty for high-volume deployers |
-| Lifespan | 20% | Average token survival time |
-| Cluster size | 20% | Connected deployers via shared funding |
+| Death rate | 40% | Percentage of the deployer's tokens that are dead |
+| Token count | 20% | Penalty for high-volume deployers (more than 10 tokens) |
+| Average lifespan | 20% | How long the deployer's tokens typically survive |
+| Cluster size | 20% | Number of connected deployers sharing the same funder |
 
-Additional penalties are applied for:
-- Active mint authority (-10 points)
-- Active freeze authority (-5 points)
-- Deployer holdings above 50% (-10 points)
-- Deploy velocity above 5/day (-10 points)
-- Bundle detection (-5 points)
+On top of the base score, the system applies targeted penalties for specific red flags detected on the token being scanned:
 
-## CLEAN vs SUSPICIOUS vs SERIAL_RUGGER
+| Penalty | Points | Trigger |
+|---------|--------|---------|
+| Active mint authority | -10 | Deployer can create unlimited new tokens |
+| Active freeze authority | -5 | Deployer can freeze holder wallets |
+| Deployer holdings >50% | -10 | Deployer still holds majority of supply |
+| Deployer holdings >30% | -5 | Deployer holds significant supply |
+| Deploy velocity >5/day | -10 | Carpet-bombing token creation |
+| Deploy velocity >2/day | -5 | Elevated creation rate |
+| Bundle detected | -5 | Deployer bought tokens in the same block as creation |
+| Top holder >80% | -5 | Single wallet controls most of supply |
+| Top holder >60% | -3 | Significant concentration risk |
 
-- **CLEAN (70-100)** — Low death rate, reasonable token count, no cluster connections. Relatively safe.
-- **SUSPICIOUS (30-70)** — Elevated death rate or concerning patterns. Proceed with caution.
-- **SERIAL_RUGGER (0-30)** — High death rate, typically with cluster connections. Strong evidence of serial rug behavior.
+The final score maps to one of three verdicts:
+
+- **CLEAN (70-100)** — Low death rate, reasonable token count, no cluster connections. The deployer has a demonstrated track record of creating tokens that retain value.
+- **SUSPICIOUS (30-70)** — Elevated death rate or concerning patterns. The deployer may be legitimate but has warning signs. Proceed with caution and lean on token-level checks.
+- **SERIAL_RUGGER (0-30)** — High death rate, typically high volume, frequently connected to cluster networks. Strong evidence of systematic rug behavior across multiple tokens.
 
 ## Funding Cluster Analysis
 
-One of Daybreak's most powerful features is cluster analysis. Here's how it works:
+One of the most powerful features in deployer reputation is **cluster analysis** — the ability to detect when seemingly independent deployers are actually controlled by the same entity.
 
-1. **Find the funding source** — Trace the deployer's earliest incoming SOL transfer.
-2. **Scan the funder's outgoing transfers** — Check who else the funder has sent SOL to.
-3. **Check recipients for Pump.fun activity** — If the funder has also funded other Pump.fun deployers, this suggests a coordinated rug network.
+Here's the pattern we see repeatedly:
 
-Cluster analysis reveals that many seemingly independent deployers are actually controlled by the same entity, using fresh wallets for each batch of tokens.
+1. A central funder wallet holds SOL
+2. The funder sends small amounts (0.1-1 SOL) to multiple fresh wallets
+3. Each fresh wallet deploys tokens on Pump.fun
+4. When a wallet's death rate gets too high and tools start flagging it, they abandon it and fund a new one
+5. The cycle repeats
 
-## Real-World Examples
+Each deployer wallet in this cluster looks independent. Different wallet addresses, different token names, different social media accounts. But follow the money backward to the funding source, and the connection becomes clear.
 
-In testing, Daybreak has identified deployers with:
-- 194 tokens created, 157 dead (80.9% death rate) — scored 8/100, SERIAL_RUGGER
-- Connected to 12 other deployers through shared funding — a full rug network
+Daybreak's cluster analysis works in three steps:
 
-These patterns are invisible when looking at any single token but become obvious through deployer reputation analysis.
+1. **Find the funding source** — Trace the deployer's earliest incoming SOL transfer to identify who funded them.
+2. **Scan the funder's outgoing transfers** — Check all wallets that received SOL (above 0.01 SOL) from the same funder.
+3. **Check recipients for Pump.fun activity** — If the funder has also bankrolled other Pump.fun deployers, and those deployers have high death rates, you're looking at a coordinated rug network.
 
-## Conclusion
+In our testing, we've identified deployers connected to **12 other deployers** through shared funding — a full rug network operating across dozens of wallets and hundreds of tokens. From the perspective of any single token, this network is invisible.
 
-Deployer reputation doesn't replace other forms of analysis — it complements them. Check the token's fundamentals, but also check who built it and what they've built before.
+## Why This Matters Now
+
+The scale of the problem is enormous. The [Solidus Labs report](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance) on Solana found that 98.6% of Pump.fun tokens are scams. Over 40% of new launches come from wallets with a history of rug pulls. And on Raydium, 93% of the 361,000 liquidity pools exhibit "soft rug pull characteristics."
+
+These aren't edge cases. Rug pulls are the default outcome for Solana tokens. The question isn't whether scams exist — it's whether you have the tools to filter them out before you trade.
+
+Token-level analysis helps, but it's not enough on its own. A token can pass every contract check and still be a rug if the deployer behind it has a history of serial rugging. Deployer reputation fills that gap.
+
+## Deployer Reputation vs. Other Tools
+
+Here's how deployer reputation analysis compares to existing rug detection approaches:
+
+| Aspect | Contract Checkers (RugCheck, SolSniffer) | Deployer Reputation (Daybreak) |
+|--------|------------------------------------------|-------------------------------|
+| **What it checks** | Token contract, authorities, liquidity | Deployer behavior, history, funding |
+| **Time scope** | Current token snapshot | Deployer's full lifetime history |
+| **Network scope** | Single token | Cross-token, cross-wallet clusters |
+| **Detects serial ruggers** | No — each token passes independently | Yes — patterns across 100+ tokens |
+| **Detects cluster networks** | No | Yes — funding source tracing |
+| **Best for** | Honeypot detection, authority checks | Behavioral intent, repeat offenders |
+
+The two approaches are complementary, not competitive. Check the token with RugCheck. Check the deployer with [DaybreakScan](https://www.daybreakscan.com/scan). Use both signals together.
+
+## Getting Started
+
+To check a deployer's reputation:
+
+1. Copy any Solana token's contract address
+2. Go to [DaybreakScan](https://www.daybreakscan.com/scan)
+3. Paste the address and connect your wallet
+4. Review the deployer's score, death rate, cluster connections, and token risks
+
+The scan takes seconds and surfaces information that would take hours to piece together manually from raw blockchain data. Three scans per day are free — enough to check the tokens you're actually considering trading.
+
+The traders who consistently avoid rug pulls aren't lucky. They're checking the deployer before they check the chart.

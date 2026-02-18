@@ -1,69 +1,165 @@
 # How to Spot Rug Pulls on Solana Before You Trade
 
-The Solana ecosystem moves fast. New tokens launch every minute on platforms like Pump.fun, and while some are legitimate projects, many are designed to extract value from unsuspecting traders. Here's how to protect yourself.
+Every day, thousands of new tokens launch on Solana. According to a [Solidus Labs report](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance), 98.6% of tokens issued on Pump.fun — the dominant token creation platform — are scams or involve fraudulent trading. Out of over 7 million tokens deployed between January 2024 and March 2025, only 97,000 retained liquidity above $1,000.
+
+Those numbers are staggering, but they also mean opportunity for traders who know what to look for. This guide breaks down the on-chain red flags that separate legitimate tokens from rug pulls, and walks you through exactly how to check before you trade.
 
 ## What Is a Rug Pull?
 
-A rug pull happens when a token creator drains liquidity or abandons a project after investors buy in. On Solana, this typically takes one of three forms:
+A rug pull is when a token creator extracts value from buyers and disappears. The name comes from the idea of pulling the rug out from under someone — one moment you're standing on solid ground, the next you're holding worthless tokens.
 
-- **Liquidity drain** — The deployer removes all liquidity from the trading pool, crashing the price to zero instantly.
-- **Pump and dump** — The deployer and insiders accumulate tokens cheaply, hype the project, then sell their holdings into retail buyers.
-- **Slow rug** — The deployer gradually sells tokens over days or weeks while maintaining an illusion of active development.
+On Solana, rug pulls typically fall into three categories:
 
-## On-Chain Red Flags
+**Hard rug (liquidity drain)** — The deployer removes all liquidity from the trading pool in a single transaction. The token's price crashes to zero instantly. This is the most dramatic form and usually happens within minutes to hours of launch.
 
-Before buying any token, check for these warning signs:
+**Pump and dump** — The deployer and insiders accumulate tokens at launch (often using bundled transactions in the same block), then coordinate social media hype to attract buyers. Once enough retail money flows in, they sell everything. The price chart shows a sharp spike followed by a cliff.
 
-### 1. Deployer's Token History
+**Slow rug** — The deployer gradually sells tokens over days or weeks while maintaining an illusion of active development. They might post updates, engage in Discord, and keep up appearances while steadily draining value. This is the hardest to detect because each individual sell looks normal.
 
-The single most predictive signal is the deployer's track record. If the wallet that created this token has previously created dozens of dead tokens, that's a major red flag. Daybreak calculates this automatically — a deployer with an 80%+ death rate is classified as a **SERIAL_RUGGER**.
+## The 7 On-Chain Red Flags
 
-### 2. Mint Authority Still Active
+Before buying any Solana token, check for these warning signs. Each one alone is concerning — multiple red flags together should be a dealbreaker.
 
-If the deployer can still mint new tokens, they can dilute your holdings at any time. Always check whether mint authority has been revoked.
+### 1. The Deployer Has a History of Dead Tokens
 
-### 3. Freeze Authority Still Active
+This is the single most predictive signal for rug pulls, and it's the one most traders overlook entirely.
 
-Freeze authority allows the deployer to freeze any wallet's tokens, preventing them from selling. This is an extreme red flag on memecoins.
+Every token on Solana was created by a specific wallet — the deployer. That wallet's history is public. If the wallet that created the token you're looking at has previously deployed 50, 100, or even 200 tokens that are now dead (zero liquidity), what do you think is going to happen to token 201?
 
-### 4. Top Holder Concentration
+Daybreak's research has identified deployers with 194 tokens created and 157 dead — an 80.9% death rate. These wallets score 8 out of 100 and are classified as **SERIAL_RUGGER**. Yet each individual token they create looks identical to a legitimate launch when viewed in isolation.
 
-When a single wallet holds more than 80% of the supply, the token is effectively centralized. A large sell from that wallet would crash the price.
+This is the core problem: tools that only analyze individual tokens miss the most important signal. You need to check the deployer, not just the token.
 
-### 5. Bundled Launch
+### 2. Mint Authority Is Still Active
 
-If the deployer created the token and made multiple buy transactions in the same block (or within a few slots), this suggests coordinated insider buying — a setup for a pump and dump.
+On Solana, the mint authority controls whether new tokens can be created. If the deployer retains mint authority, they can create unlimited new tokens at any time, diluting your holdings to worthlessness.
 
-## How to Check a Deployer
+For legitimate projects, mint authority is typically revoked after the initial supply is created. For memecoins and Pump.fun tokens, there's almost never a valid reason to keep it active.
 
-1. Go to [DaybreakScan](https://www.daybreakscan.com/scan)
-2. Paste the token's contract address
-3. Review the deployer's reputation score, death rate, and cluster analysis
-4. Check the Token Risk Analysis for mint authority, freeze authority, and top holder concentration
+**What to check:** Look for "Mint Authority: Active" in your token scan. If it's active on a memecoin, that's a hard no.
 
-## Reading a Daybreak Scan
+### 3. Freeze Authority Is Still Active
 
-A Daybreak scan provides:
+Freeze authority is even more dangerous than mint authority. It allows the deployer to freeze any wallet's token balance, preventing the holder from selling. This is the mechanism behind honeypot scams — tokens you can buy but can't sell.
 
-- **Reputation Score (0-100)** — Higher is better. Factors in death rate (40%), token count (20%), lifespan (20%), and cluster size (20%).
-- **Verdict** — CLEAN (70+), SUSPICIOUS (30-70), or SERIAL_RUGGER (below 30).
-- **Death Rate** — Percentage of the deployer's tokens that are dead (no liquidity).
-- **Funding Cluster** — Whether the deployer is connected to other deployers through shared funding sources.
-- **Token Risks** — Mint/freeze authority, deployer holdings, top holder concentration, and bundle detection.
+**What to check:** "Freeze Authority: Active" is a critical red flag. Unless the token is a regulated stablecoin or has a documented reason for freeze capability, avoid it.
 
-## Checklist Before Trading
+### 4. Extreme Top Holder Concentration
 
-Before investing in any Solana token:
+When a single wallet holds more than 80% of a token's supply, the token is effectively centralized. That wallet can crash the price at any time by selling even a fraction of their holdings.
 
-- [ ] Check the deployer's reputation score on Daybreak
-- [ ] Verify mint authority is revoked
-- [ ] Verify freeze authority is revoked
+Even 40-60% concentration is risky for smaller tokens. For context, most legitimate projects have their top holder at 10-20% of supply (often a liquidity pool or treasury, not a personal wallet).
+
+**What to check:** Look at the top holder percentage. Above 80% is dangerous. Above 60% warrants caution. The key question is whether the top holder is a liquidity pool (less concerning) or a personal wallet (very concerning).
+
+### 5. Bundled Launch Transactions
+
+Bundling is when the deployer creates a token and makes multiple buy transactions in the same block or within a few Solana slots (roughly 400 milliseconds each). This pattern means the deployer is accumulating tokens at the lowest possible price before anyone else can participate.
+
+Why does this matter? Because the deployer now holds a large position acquired at cost basis near zero. When the token gains traction and the price rises, they can sell into real buyers for pure profit.
+
+**What to check:** Daybreak's bundle detection examines the first 20 transactions after token creation, flagging cases where the deployer transacted within ±3 slots of the creation transaction.
+
+### 6. Connected to a Rug Cluster
+
+One of the most sophisticated scam patterns involves cluster networks. Here's how they work:
+
+1. A central funder wallet holds SOL
+2. The funder distributes SOL to multiple fresh wallets
+3. Each wallet deploys tokens independently
+4. When one wallet's reputation gets too bad, they fund a new one
+
+From the outside, each deployer wallet looks independent. But when you trace the funding source, you discover they're all controlled by the same entity. Daybreak calls this **cluster analysis** — it traces the deployer's earliest funding transaction, then checks whether the same funder has bankrolled other Pump.fun deployers.
+
+A deployer connected to a cluster of other deployers with high death rates is almost certainly part of a coordinated rug operation.
+
+### 7. Suspicious Deploy Velocity
+
+Legitimate project founders create tokens occasionally. Serial ruggers create tokens constantly — sometimes 5, 10, or even 20 per day. This "carpet bombing" approach works on volume: deploy dozens of tokens, hype each one briefly, and profit from the few that get any traction.
+
+**What to check:** A deploy velocity above 5 tokens per day is a strong red flag. Above 2 per day warrants caution. Legitimate deployers typically create tokens days or weeks apart.
+
+## How to Check a Token in 60 Seconds
+
+Here's the practical workflow:
+
+1. **Copy the token's contract address** from DexScreener, Birdeye, or wherever you found the token
+2. **Go to [DaybreakScan](https://www.daybreakscan.com/scan)** and paste the address
+3. **Connect your wallet** (Phantom or Solflare) and sign a message to authenticate
+4. **Review the scan results:**
+   - **Reputation Score:** 70-100 is CLEAN, 30-70 is SUSPICIOUS, 0-30 is SERIAL_RUGGER
+   - **Death Rate:** The percentage of the deployer's tokens that have died. Above 50% is concerning; above 80% is a near-certain rug pattern
+   - **Token Risks:** Check mint authority, freeze authority, top holder %, and bundle detection
+   - **Funding Cluster:** If the deployer is part of a network of connected deployers, proceed with extreme caution
+
+The entire check takes under a minute and can save you from losing your entire position.
+
+## Reading the Reputation Score
+
+Daybreak's reputation score is a 0-100 composite that weighs multiple factors:
+
+| Component | Weight | What It Measures |
+|-----------|--------|-----------------|
+| Death rate | 40% | What percentage of the deployer's tokens are dead |
+| Token count | 20% | Penalty for deployers who mass-produce tokens |
+| Average lifespan | 20% | How long the deployer's tokens typically survive |
+| Cluster size | 20% | How many connected deployers share the same funding source |
+
+On top of the base score, additional penalties are applied:
+
+- **Active mint authority:** -10 points
+- **Active freeze authority:** -5 points
+- **Deployer holdings above 50%:** -10 points
+- **Deploy velocity above 5/day:** -10 points
+- **Bundle detected:** -5 points
+- **Top holder above 80%:** -5 points
+
+A score of 70+ (CLEAN) means the deployer has a track record of creating tokens that survive, no active authorities on the current token, and no connections to rug clusters.
+
+A score below 30 (SERIAL_RUGGER) means strong evidence of serial rug behavior — high death rate, often high volume, frequently connected to cluster networks.
+
+## What Other Tools Miss
+
+Most Solana rug detection tools (RugCheck, SolSniffer, De.Fi Scanner) focus on **token-level** analysis: mint authority, freeze authority, liquidity locks, holder distribution, and honeypot simulation. These checks are valuable, but they all analyze the token in isolation.
+
+The problem is that a serial rugger's latest token looks identical to a legitimate project's token at the contract level. Same standard token program. Same revoked authorities (smart ruggers know to revoke these). Same initial liquidity. The contract doesn't tell you who's behind it.
+
+Daybreak's approach is different — it analyzes the **deployer** rather than the token. By looking at the deployer's full history across all tokens they've ever created, patterns that are invisible at the token level become obvious:
+
+- A deployer who has created 100 tokens with a 90% death rate
+- A deployer connected to 12 other deployers through shared funding
+- A deployer who creates 5+ tokens per day
+- A deployer who consistently bundles launch transactions
+
+These behavioral signals are the strongest predictors of future rug pulls, and they're only visible through deployer-level analysis.
+
+## The Checklist
+
+Before investing in any Solana token, run through this list:
+
+- [ ] Check the deployer's reputation score on [DaybreakScan](https://www.daybreakscan.com/scan)
+- [ ] Verify the deployer's death rate is below 50%
+- [ ] Confirm mint authority is revoked
+- [ ] Confirm freeze authority is revoked
 - [ ] Check top holder concentration (below 40% is ideal)
 - [ ] Look for bundle detection (none is ideal)
-- [ ] Review the deployer's token history (low death rate)
+- [ ] Review the deployer's deploy velocity (below 2/day is ideal)
 - [ ] Check if the deployer is connected to a rug cluster
 - [ ] Verify the token has real liquidity (not just a few dollars)
+- [ ] Cross-reference with [RugCheck](https://rugcheck.xyz) for contract-level analysis
 
-## Conclusion
+No single check guarantees safety. But combining deployer reputation analysis with token-level risk checks dramatically reduces your exposure. The traders who get rugged are almost always the ones who skip the research.
 
-No single check guarantees safety, but combining deployer reputation analysis with token-level risk checks dramatically reduces your exposure to rug pulls. Stay safe out there.
+## Frequently Asked Questions
+
+**Can a CLEAN-rated deployer still rug?**
+Yes, but it's statistically unlikely. A deployer rated CLEAN has a demonstrated track record of creating tokens that retain liquidity. They'd be burning their own reputation. That said, always use the full checklist — reputation is one input, not the only one.
+
+**What if the deployer is brand new with no history?**
+A deployer with zero or very few prior tokens gets a neutral score. Lack of history isn't a red flag, but it isn't a green flag either. In this case, the token-level checks (mint authority, freeze authority, holder concentration) become more important.
+
+**How often are scores updated?**
+Scores are calculated in real-time based on the deployer's current on-chain history. Every scan reflects the latest data from the Solana blockchain.
+
+**Is DaybreakScan free?**
+Yes. You get 3 free scans per day after connecting your Solana wallet. For higher volume, paid access is available via the x402 payment protocol.

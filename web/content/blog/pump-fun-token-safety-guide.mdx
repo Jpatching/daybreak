@@ -1,59 +1,133 @@
 # Pump.fun Token Safety: A Trader's Guide
 
-Pump.fun has become the dominant token creation platform on Solana, launching thousands of tokens daily. While the platform itself is legitimate infrastructure, the low barrier to entry means scams are common. Here's how to evaluate Pump.fun tokens before trading.
+Pump.fun has become the engine of Solana's memecoin economy. The platform makes it trivially easy to launch a token — pay a fraction of a SOL, pick a name and image, and your token is live on a bonding curve within seconds. This accessibility has made Pump.fun the birthplace of legitimate cultural tokens, viral memes, and occasionally life-changing trades.
 
-## How Pump.fun Works
+It has also made it the single largest vector for rug pulls in crypto.
 
-Pump.fun provides a bonding curve mechanism for token launches. Anyone can create a token by paying a small fee. The token starts on an internal bonding curve and "graduates" to a Raydium liquidity pool once it reaches a market cap threshold.
+According to a [Solidus Labs investigation](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance), **98.6% of tokens issued on Pump.fun are scams or involve fraudulent trading**. Between January 2024 and March 2025, over 7 million tokens were deployed with at least five trades each. Only 97,000 — less than 1.4% — retained liquidity above $1,000.
 
-Key characteristics:
-- Standard token program — no custom smart contract needed
-- Automatic liquidity provisioning
-- Low cost to create (fraction of a SOL)
-- No audit required
+This guide is for traders who want to navigate Pump.fun without becoming a statistic.
 
-This accessibility is both the strength and the risk.
+## How Pump.fun Actually Works
 
-## Common Scam Patterns
+Understanding the mechanics helps you understand the risks.
+
+**The bonding curve:** When a token is created on Pump.fun, it starts on an internal bonding curve — a mathematical formula that determines the token's price based on supply. Early buyers get lower prices. As more people buy, the price rises along the curve. If people sell, the price drops back down.
+
+**Graduation:** When a token reaches a market cap threshold (roughly $69,000), it "graduates" from the bonding curve and migrates to a Raydium liquidity pool. At this point, the token becomes tradeable on the broader Solana DEX ecosystem, and liquidity is locked in the Raydium pool.
+
+**No custom contracts:** This is crucial for safety analysis. Pump.fun tokens all use the same standard Solana token program. There are no custom smart contracts, no unique code to audit, and no contract-level backdoors. The security risk isn't in the code — it's in the deployer's behavior.
+
+**Low barrier to entry:** Creating a token costs fractions of a SOL and takes about 30 seconds. No audit, no team doxxing, no code review. This is by design — Pump.fun is permissionless infrastructure. But it means literally anyone can create a token, including people who intend to rug.
+
+## The 5 Most Common Pump.fun Scam Patterns
 
 ### 1. Deploy and Dump
-The deployer creates a token, buys a significant portion immediately (sometimes in the same block), then sells into early buyers. The token appears to have momentum, but it's artificial.
 
-### 2. Cluster Rugging
-A single entity operates multiple deployer wallets, funded from the same source. They deploy tokens from different wallets to avoid pattern detection. Daybreak's cluster analysis is specifically designed to catch this.
+The most basic pattern. The deployer creates a token, buys a significant portion in the same block using bundled transactions, then sells into early buyers who discover the token on the Pump.fun feed or through social media.
 
-### 3. Social Engineering
-The deployer creates a token tied to a trending topic, then promotes it on social media. The token has no real utility — it's pure speculation. Once enough buyers are in, the deployer sells.
+The chart looks like a sharp spike followed by a cliff. The deployer profits, the buyers hold worthless tokens.
 
-## Checking Before You Buy
+**How Daybreak catches it:** Bundle detection identifies when the deployer transacted within ±3 slots of the token creation. This is a strong indicator of pre-arranged insider buying.
 
-### Step 1: Deployer Reputation
-Paste the token address into [DaybreakScan](https://www.daybreakscan.com/scan). A deployer with a death rate above 50% should give you serious pause.
+### 2. Social Media Pump
 
-### Step 2: Mint/Freeze Authority
-Check the Token Risk Analysis section of your scan. For memecoins, both mint and freeze authority should be revoked. If either is active, the deployer has admin control over the token.
+The deployer creates a token tied to a trending topic — a viral event, celebrity mention, or meme format. They promote it aggressively on Twitter/X, Telegram, and Discord. The token gains real traction because the topic is genuinely trending, but the deployer has no intention of building anything. Once buying pressure peaks, they sell.
 
-**Mint authority active** means they can create unlimited new tokens, diluting your holdings.
-**Freeze authority active** means they can prevent you from selling.
+This pattern is harder to detect on-chain because the token may actually have decent volume and holder count. The key signal is the deployer's history — if they've created 50 previous tokens around trending topics, all of which are now dead, the pattern is obvious.
 
-### Step 3: Bundle Detection
-Daybreak checks whether the deployer made multiple transactions in the same block or within a few slots of the token creation. This pattern — called "bundling" — suggests the deployer is accumulating tokens at launch prices before other buyers can participate.
+**How Daybreak catches it:** Death rate analysis across the deployer's full token history. A deployer who has created dozens of trend-riding tokens with an 80%+ death rate is running a serial operation.
 
-### Step 4: Holder Distribution
-Check the top holder percentage. If the top holder owns more than 80% of the supply, the token is effectively controlled by one wallet. Even 40-60% concentration is risky for smaller tokens.
+### 3. Cluster Rugging
 
-### Step 5: Cluster Analysis
-Check the Funding & Cluster section. If the deployer's funder has also funded other Pump.fun deployers — especially ones with high death rates — you're likely looking at a rug network.
+The most sophisticated pattern. A single entity operates multiple deployer wallets, all funded from the same source wallet. Each deployer wallet creates a few tokens, rugs them, then the entity funds a fresh wallet and repeats.
 
-## Tools to Use
+From a trader's perspective, each token comes from a different "new" deployer with a clean history. But trace the funding backward and the cluster becomes visible.
 
-- **[DaybreakScan](https://www.daybreakscan.com)** — Deployer reputation, cluster analysis, token risks
-- **[DexScreener](https://dexscreener.com)** — Liquidity, volume, price charts
-- **[Solscan](https://solscan.io)** — Raw transaction history, holder distribution
-- **[RugCheck](https://rugcheck.xyz)** — Token contract risk analysis
+**How Daybreak catches it:** Funding cluster analysis traces the deployer's original SOL funding, then checks if the same funder has bankrolled other Pump.fun deployers. We've identified clusters of 12+ connected deployers operating under a single funder.
 
-## The Bottom Line
+### 4. Slow Rug (Graduated Tokens)
 
-The best defense against Pump.fun scams is checking the deployer before checking the token. A clean deployer with a low death rate, revoked authorities, and no cluster connections is a much safer bet than one with a history of dead tokens.
+Some scammers play the long game. The token graduates to Raydium, the deployer builds a small community, maybe sets up a Telegram group and a basic website. Over days or weeks, they gradually sell their holdings into organic buying pressure. By the time the community realizes what's happening, the deployer has extracted most of the value.
 
-Stay skeptical, do your research, and never invest more than you can afford to lose.
+**How Daybreak catches it:** Deployer holdings analysis. If the deployer still holds a significant percentage of the token supply (>30%) weeks after launch, they're sitting on an exit position.
+
+### 5. Authority Exploitation
+
+The deployer launches a token with mint and/or freeze authority active. These authorities give them godlike control over the token:
+
+- **Mint authority active:** The deployer can create unlimited new tokens at any time, diluting all existing holders to zero.
+- **Freeze authority active:** The deployer can freeze any wallet's token balance, preventing them from selling. This creates a honeypot — you can buy but can't sell.
+
+Smart scammers will keep these authorities active but not exercise them immediately, waiting until the token has meaningful value before exploiting them.
+
+**How Daybreak catches it:** Automatic authority checks on every scan. Active mint or freeze authority triggers significant score penalties (-10 and -5 points respectively).
+
+## The 5-Step Safety Check for Any Pump.fun Token
+
+Before you buy any Pump.fun token, run through these steps. The entire process takes under 2 minutes.
+
+### Step 1: Check the Deployer's Reputation
+
+This is the most important step and the one most traders skip.
+
+Go to [DaybreakScan](https://www.daybreakscan.com/scan) and paste the token's contract address. The scan will identify the deployer and pull their full on-chain history.
+
+**What to look for:**
+- **Death rate below 50%** — ideally below 20%
+- **Token count in single digits** — mass deployers are almost always scammers
+- **Deploy velocity below 2/day** — legitimate founders don't carpet-bomb tokens
+- **Verdict: CLEAN** — score of 70 or above
+
+A deployer with a death rate above 80% and 50+ tokens is running a serial rug operation. There's no legitimate explanation for that pattern.
+
+### Step 2: Check Token Authorities
+
+In the Token Risk Analysis section of your Daybreak scan:
+
+- **Mint Authority:** Should say "Revoked." If it says "Active," the deployer can print unlimited tokens.
+- **Freeze Authority:** Should say "Revoked." If it says "Active," the deployer can prevent you from selling.
+
+For memecoins, there is never a valid reason for either authority to remain active after launch.
+
+### Step 3: Check Bundle Detection
+
+Daybreak examines the first 20 transactions after token creation to detect bundled buys. If the deployer (or associated wallets) made purchases in the same block or within a few slots, the token was likely set up for a pump and dump.
+
+**No bundle detected** is what you want to see.
+
+### Step 4: Check Holder Distribution
+
+Look at the top holder percentage:
+
+- **Below 20%** — Healthy distribution
+- **20-40%** — Acceptable, but check who the top holder is (liquidity pool vs. personal wallet)
+- **40-60%** — Risky. One large sell could crash the price
+- **Above 80%** — Avoid. The token is effectively controlled by a single wallet
+
+### Step 5: Check the Funding Cluster
+
+In the Funding & Cluster section, Daybreak traces the deployer's funding source and checks for connections to other Pump.fun deployers.
+
+**No cluster connections** means the deployer appears to be operating independently. Cluster connections — especially to deployers with high death rates — indicate a coordinated rug network.
+
+## Tools to Use Together
+
+No single tool catches everything. Here's the stack we recommend:
+
+| Tool | What It Checks | Link |
+|------|---------------|------|
+| **DaybreakScan** | Deployer reputation, cluster analysis, token risks | [daybreakscan.com](https://www.daybreakscan.com) |
+| **RugCheck** | Contract risk analysis, honeypot detection | [rugcheck.xyz](https://rugcheck.xyz) |
+| **DexScreener** | Liquidity depth, volume, price charts, holder count | [dexscreener.com](https://dexscreener.com) |
+| **Solscan** | Raw transaction history, holder distribution | [solscan.io](https://solscan.io) |
+
+Start with DaybreakScan for deployer-level analysis, then cross-reference with RugCheck for contract-level analysis. Use DexScreener for market data and Solscan for diving deeper into specific transactions.
+
+## The Realistic Outlook
+
+Pump.fun isn't going away, and neither are the scams. The platform's permissionless design is a feature, not a bug — it enables permissionless innovation. The cost of that innovation is that bad actors can participate just as easily as good ones.
+
+The 98.6% scam rate sounds terrifying, but it also means the 1.4% of tokens that survive are competing for real attention and capital. The goal isn't to avoid Pump.fun entirely — it's to develop a reliable process for filtering the 98.6% so you can focus on the tokens that actually have a chance.
+
+That process starts with checking the deployer. Not the chart. Not the name. Not the Twitter hype. The deployer.
