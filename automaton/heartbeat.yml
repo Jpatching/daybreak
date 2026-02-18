@@ -1,0 +1,23 @@
+entries:
+  - name: scan_trending
+    schedule: "0 */4 * * *"   # Every 4 hours
+    task: exec
+    command: |
+      curl -s https://api.dexscreener.com/token-boosts/top/v1 |
+      python3 -c "import sys,json; tokens=[t for t in json.load(sys.stdin) if t.get('chainId')=='solana'][:5]; [print(t['tokenAddress']) for t in tokens]"
+    enabled: true
+
+  - name: heartbeat_ping
+    schedule: "*/5 * * * *"   # Every 5 minutes
+    task: heartbeat_ping
+    enabled: true
+
+  - name: check_inbox
+    schedule: "*/2 * * * *"   # Every 2 minutes
+    task: check_social_inbox
+    enabled: true
+
+  - name: check_credits
+    schedule: "0 * * * *"     # Hourly
+    task: check_credits
+    enabled: true
