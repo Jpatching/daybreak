@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { scanToken, scanWallet, checkHealth, PaymentRequiredError } from '../api.js';
+import { scanToken, scanWallet, scanTokenPaid, scanWalletPaid, fetchUsage, checkHealth, PaymentRequiredError } from '../api.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -93,6 +93,111 @@ describe('API module', () => {
         expect.any(Object)
       );
     });
+  });
+});
+
+describe('scanTokenPaid', () => {
+  it('calls /paid/deployer/:addr with X-PAYMENT header (not Authorization)', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: {}, deployer: {} }),
+    });
+
+    await scanTokenPaid('someAddr', 'base64-payment-data');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/paid/deployer/someAddr'),
+      expect.objectContaining({
+        headers: { 'X-PAYMENT': 'base64-payment-data' },
+      })
+    );
+  });
+
+  it('returns JSON on 200', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ verdict: 'CLEAN', score: 95 }),
+    });
+
+    const result = await scanTokenPaid('addr', 'payment');
+    expect(result.verdict).toBe('CLEAN');
+  });
+
+  it('throws with data.error on failure', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Invalid payment signature' }),
+    });
+
+    await expect(scanTokenPaid('addr', 'bad')).rejects.toThrow('Invalid payment signature');
+  });
+
+  it('throws with fallback message when json() fails', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error('not json')),
+    });
+
+    await expect(scanTokenPaid('addr', 'pay')).rejects.toThrow('Payment scan failed (500)');
+  });
+});
+
+describe('scanWalletPaid', () => {
+  it('calls /paid/wallet/:addr with X-PAYMENT header', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ deployer: {} }),
+    });
+
+    await scanWalletPaid('walletAddr', 'payment-header');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/paid/wallet/walletAddr'),
+      expect.objectContaining({
+        headers: { 'X-PAYMENT': 'payment-header' },
+      })
+    );
+  });
+
+  it('returns parsed JSON on success', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ deployer: { wallet: 'abc' } }),
+    });
+
+    const result = await scanWalletPaid('addr', 'pay');
+    expect(result.deployer.wallet).toBe('abc');
+  });
+});
+
+describe('fetchUsage', () => {
+  it('calls /auth/usage with Bearer token', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ scans_used: 1, scans_limit: 3 }),
+    });
+
+    const result = await fetchUsage('my-jwt');
+    expect(result.scans_used).toBe(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/auth/usage'),
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer my-jwt' },
+      })
+    );
+  });
+
+  it('throws AUTH_REQUIRED on 401', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 401 });
+    await expect(fetchUsage('expired-token')).rejects.toThrow('AUTH_REQUIRED');
+  });
+
+  it('throws RATE_LIMITED on 429', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 429 });
+    await expect(fetchUsage('token')).rejects.toThrow('RATE_LIMITED');
   });
 });
 

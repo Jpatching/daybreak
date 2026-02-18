@@ -12,8 +12,10 @@ import healthRouter from './routes/health';
 import authRouter from './routes/auth';
 import deployerRouter from './routes/deployer';
 import walletRouter from './routes/wallet';
+import reportcardRouter from './routes/reportcard';
 import { requireAuth } from './middleware/auth';
 import { createX402Middleware, getX402Stats, type X402ServerConfig } from './services/x402';
+import { closeBrowser } from './services/reportcard';
 
 // Import db to trigger SQLite init + admin seeding on startup
 import './services/db';
@@ -66,6 +68,7 @@ app.use('/api/', rateLimit({
 // Public routes
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/report', reportcardRouter);
 
 // Free tier: wallet auth + rate limit (frontend users)
 app.use('/api/v1/deployer', requireAuth, deployerRouter);
@@ -109,11 +112,22 @@ app.use((_req, res) => {
 
 // Only start listening when run directly (not imported for testing)
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Daybreak API running on port ${PORT}`);
     console.log(`Health: http://localhost:${PORT}/api/v1/health`);
     console.log(`Bot endpoints: /api/v1/bot/deployer/:token, /api/v1/bot/wallet/:wallet`);
+    console.log(`Report cards: /api/v1/report/:token, POST /api/v1/report/bot/:token`);
     console.log(`x402 paid endpoints: /api/v1/paid/deployer/:token, /api/v1/paid/wallet/:wallet`);
     console.log(`x402 stats: http://localhost:${PORT}/api/v1/x402/stats`);
   });
+
+  // Graceful shutdown: close Puppeteer browser
+  const shutdown = async () => {
+    console.log('\nShutting down...');
+    await closeBrowser();
+    server.close();
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }

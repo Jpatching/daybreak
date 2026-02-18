@@ -72,6 +72,60 @@ const setAdminStmt = db.prepare(`
   ON CONFLICT(wallet) DO UPDATE SET is_admin = ?
 `);
 
+// Report cards table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS report_cards (
+    token_address TEXT NOT NULL,
+    card_type     TEXT NOT NULL,
+    image_path    TEXT NOT NULL,
+    verdict       TEXT,
+    score         INTEGER,
+    generated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (token_address, card_type)
+  )
+`);
+
+const saveReportCardStmt = db.prepare(`
+  INSERT INTO report_cards (token_address, card_type, image_path, verdict, score, generated_at)
+  VALUES (?, ?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(token_address, card_type) DO UPDATE SET
+    image_path = excluded.image_path,
+    verdict = excluded.verdict,
+    score = excluded.score,
+    generated_at = datetime('now')
+`);
+
+const getReportCardStmt = db.prepare(`
+  SELECT token_address, card_type, image_path, verdict, score, generated_at
+  FROM report_cards WHERE token_address = ? AND card_type = ?
+`);
+
+const getRecentCardsStmt = db.prepare(`
+  SELECT token_address, card_type, image_path, verdict, score, generated_at
+  FROM report_cards ORDER BY generated_at DESC LIMIT ?
+`);
+
+export interface ReportCardRow {
+  token_address: string;
+  card_type: string;
+  image_path: string;
+  verdict: string | null;
+  score: number | null;
+  generated_at: string;
+}
+
+export function saveReportCard(token: string, type: string, imagePath: string, verdict: string | null, score: number | null): void {
+  saveReportCardStmt.run(token, type, imagePath, verdict, score);
+}
+
+export function getReportCard(token: string, type: string): ReportCardRow | null {
+  return (getReportCardStmt.get(token, type) as ReportCardRow) || null;
+}
+
+export function getRecentCards(limit: number = 20): ReportCardRow[] {
+  return getRecentCardsStmt.all(limit) as ReportCardRow[];
+}
+
 // Public API
 
 export interface WalletUsage {
