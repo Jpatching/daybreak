@@ -1,6 +1,17 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { posts } from '@/content/blog';
+import HowToSpot from '@/content/blog/how-to-spot-solana-rug-pulls.mdx';
+import WhatIsDeployer from '@/content/blog/what-is-deployer-reputation.mdx';
+import PumpFunGuide from '@/content/blog/pump-fun-token-safety-guide.mdx';
+import WhyAudits from '@/content/blog/why-contract-audits-arent-enough.mdx';
+
+const contentMap = {
+  'how-to-spot-solana-rug-pulls': HowToSpot,
+  'what-is-deployer-reputation': WhatIsDeployer,
+  'pump-fun-token-safety-guide': PumpFunGuide,
+  'why-contract-audits-arent-enough': WhyAudits,
+};
 
 export async function generateStaticParams() {
   return posts.map((post) => ({ slug: post.slug }));
@@ -36,13 +47,8 @@ export default async function BlogPostPage({ params }) {
   const post = posts.find((p) => p.slug === slug);
   if (!post) notFound();
 
-  let Content;
-  try {
-    const mod = await import(`@/content/blog/${slug}.mdx`);
-    Content = mod.default;
-  } catch {
-    notFound();
-  }
+  const Content = contentMap[slug];
+  if (!Content) notFound();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
