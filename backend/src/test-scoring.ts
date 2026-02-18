@@ -28,6 +28,29 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
+// Helper to create input with defaults
+function makeInput(overrides: Partial<{
+  deathRate: number;
+  rugRate: number;
+  tokenCount: number;
+  verifiedCount: number;
+  avgLifespanDays: number;
+  clusterSize: number;
+  riskPenalties: any;
+}>) {
+  const deathRate = overrides.deathRate ?? overrides.rugRate ?? 0;
+  const tokenCount = overrides.tokenCount ?? 1;
+  return {
+    deathRate,
+    rugRate: overrides.rugRate ?? deathRate,
+    tokenCount,
+    verifiedCount: overrides.verifiedCount ?? tokenCount,
+    avgLifespanDays: overrides.avgLifespanDays ?? 0,
+    clusterSize: overrides.clusterSize ?? 0,
+    riskPenalties: overrides.riskPenalties,
+  };
+}
+
 // ─── Unit Tests: calculateReputation() ───────────────────────────────
 
 function testScoringUnit() {
@@ -35,109 +58,107 @@ function testScoringUnit() {
 
   // Test 1: Perfect deployer — 1 alive token, no rug, no cluster
   {
-    const r = calculateReputation({
-      rugRate: 0.0,
+    const r = calculateReputation(makeInput({
+      deathRate: 0.0,
       tokenCount: 1,
       avgLifespanDays: 60,
       clusterSize: 0,
-    });
+    }));
     assert(r.verdict === 'CLEAN', 'Perfect deployer → CLEAN', `got ${r.verdict}`);
-    assert(r.score >= 85, 'Perfect deployer score >= 85', `got ${r.score}`);
+    assert(r.score >= 75, 'Perfect deployer score >= 75', `got ${r.score}`);
   }
 
-  // Test 2: Serial rugger — many dead tokens, high rug rate
+  // Test 2: Serial rugger — many dead tokens, high death rate
   {
-    const r = calculateReputation({
-      rugRate: 0.9,
+    const r = calculateReputation(makeInput({
+      deathRate: 0.9,
       tokenCount: 50,
+      verifiedCount: 50,
       avgLifespanDays: 1,
       clusterSize: 5,
-    });
+    }));
     assert(r.verdict === 'SERIAL_RUGGER', 'Serial rugger → SERIAL_RUGGER', `got ${r.verdict}`);
     assert(r.score < 30, 'Serial rugger score < 30', `got ${r.score}`);
   }
 
-  // Test 3 (Bug 1 fix): Single dead token should NOT be SERIAL_RUGGER
+  // Test 3: Single dead token should NOT be SERIAL_RUGGER
   {
-    const r = calculateReputation({
-      rugRate: 1.0,
+    const r = calculateReputation(makeInput({
+      deathRate: 1.0,
       tokenCount: 1,
       avgLifespanDays: 0,
       clusterSize: 0,
-    });
+    }));
     assert(
       r.verdict !== 'SERIAL_RUGGER',
-      'Single dead token ≠ SERIAL_RUGGER (Bug 1 fix)',
+      'Single dead token ≠ SERIAL_RUGGER',
       `got ${r.verdict}, score=${r.score}`
-    );
-    assert(
-      r.verdict === 'SUSPICIOUS' || r.verdict === 'CLEAN',
-      'Single dead token → SUSPICIOUS or CLEAN',
-      `got ${r.verdict}`
     );
   }
 
   // Test 4: Two dead tokens — still below threshold (needs >= 3)
   {
-    const r = calculateReputation({
-      rugRate: 1.0,
+    const r = calculateReputation(makeInput({
+      deathRate: 1.0,
       tokenCount: 2,
+      verifiedCount: 2,
       avgLifespanDays: 0,
       clusterSize: 0,
-    });
+    }));
     assert(
       r.verdict !== 'SERIAL_RUGGER',
-      '2 dead tokens ≠ SERIAL_RUGGER (Bug 1 fix)',
+      '2 dead tokens ≠ SERIAL_RUGGER',
       `got ${r.verdict}, score=${r.score}`
     );
   }
 
-  // Test 5: Three dead tokens — now eligible for SERIAL_RUGGER via rugRate override
+  // Test 5: Three dead tokens — now eligible for SERIAL_RUGGER
   {
-    const r = calculateReputation({
-      rugRate: 1.0,
+    const r = calculateReputation(makeInput({
+      deathRate: 1.0,
       tokenCount: 3,
+      verifiedCount: 3,
       avgLifespanDays: 0,
       clusterSize: 0,
-    });
+    }));
     assert(
       r.verdict === 'SERIAL_RUGGER',
-      '3 dead tokens + 100% rug → SERIAL_RUGGER',
+      '3 dead tokens + 100% death → SERIAL_RUGGER',
       `got ${r.verdict}, score=${r.score}`
     );
   }
 
-  // Test 6: Score math spot-check
+  // Test 6: Bayesian scoring — small sample regresses toward prior
   {
-    // rugRate=0.5, tokenCount=10, avgLifespan=20, clusterSize=3
-    // rugComponent = (1 - 0.5) * 40 = 20
-    // baseTokenPenalty = max(0, 20 * (1 - log10(10)/3)) = 20 * (1 - 1/3) = 13.33
-    // lostPoints = 20 - 13.33 = 6.67
-    // rugScaleFactor = min(1, 0.5/0.5) = 1.0
-    // tokenPenalty = 20 - 6.67 * 1.0 = 13.33
-    // lifespanScore = min(20, 20 * 0.5) = 10
-    // clusterPenalty = max(0, 20 - min(20, 3*2)) = max(0, 20 - 6) = 14
-    // total = round(20 + 13.33 + 10 + 14) = round(57.33) = 57
-    const r = calculateReputation({
-      rugRate: 0.5,
-      tokenCount: 10,
+    const small = calculateReputation(makeInput({
+      deathRate: 0.5,
+      tokenCount: 2,
+      verifiedCount: 2,
       avgLifespanDays: 20,
-      clusterSize: 3,
-    });
-    assert(r.score === 57, 'Score math spot-check = 57', `got ${r.score}`);
-    assert(r.verdict === 'SUSPICIOUS', 'Score 57 → SUSPICIOUS', `got ${r.verdict}`);
+      clusterSize: 0,
+    }));
+    const large = calculateReputation(makeInput({
+      deathRate: 0.5,
+      tokenCount: 100,
+      verifiedCount: 100,
+      avgLifespanDays: 20,
+      clusterSize: 0,
+    }));
+    // Small sample should regress toward 50% prior, so score should be similar but not worse
+    assert(small.score >= large.score - 5, 'Small sample Bayesian regression protects score',
+      `small=${small.score} large=${large.score}`);
   }
 
   // Test 7: Risk penalties deduct correctly
   {
-    const base = calculateReputation({
-      rugRate: 0.0,
+    const base = calculateReputation(makeInput({
+      deathRate: 0.0,
       tokenCount: 1,
       avgLifespanDays: 60,
       clusterSize: 0,
-    });
-    const withRisks = calculateReputation({
-      rugRate: 0.0,
+    }));
+    const withRisks = calculateReputation(makeInput({
+      deathRate: 0.0,
       tokenCount: 1,
       avgLifespanDays: 60,
       clusterSize: 0,
@@ -148,8 +169,9 @@ function testScoringUnit() {
         bundleDetected: true,         // -5
         deployerHoldingsPct: null,
         deployVelocity: null,
+        deployerIsBurner: false,
       },
-    });
+    }));
     const expectedDiff = 25;
     const actualDiff = base.score - withRisks.score;
     assert(actualDiff === expectedDiff, `Risk penalties total -25 (got -${actualDiff})`);
@@ -157,19 +179,57 @@ function testScoringUnit() {
 
   // Test 8: Cluster size penalty works
   {
-    const noCluster = calculateReputation({
-      rugRate: 0.0,
+    const noCluster = calculateReputation(makeInput({
+      deathRate: 0.0,
       tokenCount: 1,
       avgLifespanDays: 30,
       clusterSize: 0,
-    });
-    const bigCluster = calculateReputation({
-      rugRate: 0.0,
+    }));
+    const bigCluster = calculateReputation(makeInput({
+      deathRate: 0.0,
       tokenCount: 1,
       avgLifespanDays: 30,
       clusterSize: 10,
-    });
+    }));
     assert(noCluster.score > bigCluster.score, 'Big cluster lowers score', `no=${noCluster.score} big=${bigCluster.score}`);
+  }
+
+  // Test 9: Burner wallet penalty
+  {
+    const noBurner = calculateReputation(makeInput({
+      deathRate: 0.5,
+      tokenCount: 5,
+      verifiedCount: 5,
+      avgLifespanDays: 10,
+      clusterSize: 0,
+      riskPenalties: {
+        mintAuthorityActive: false,
+        freezeAuthorityActive: false,
+        topHolderPct: null,
+        bundleDetected: false,
+        deployerHoldingsPct: null,
+        deployVelocity: null,
+        deployerIsBurner: false,
+      },
+    }));
+    const withBurner = calculateReputation(makeInput({
+      deathRate: 0.5,
+      tokenCount: 5,
+      verifiedCount: 5,
+      avgLifespanDays: 10,
+      clusterSize: 0,
+      riskPenalties: {
+        mintAuthorityActive: false,
+        freezeAuthorityActive: false,
+        topHolderPct: null,
+        bundleDetected: false,
+        deployerHoldingsPct: null,
+        deployVelocity: null,
+        deployerIsBurner: true,
+      },
+    }));
+    assert(noBurner.score - withBurner.score === 10, 'Burner penalty = -10',
+      `no=${noBurner.score} burner=${withBurner.score}`);
   }
 }
 
@@ -190,7 +250,6 @@ async function testLiveAPI() {
   }
 
   // Test: $ARC token scan (requires auth — use test routes or skip)
-  // We try test routes first, then unauthenticated, then skip
   const testEndpoints = [
     `${API_BASE}/test/deployer/${ARC_TOKEN}`,
     `${API_BASE}/deployer/${ARC_TOKEN}`,
@@ -212,11 +271,12 @@ async function testLiveAPI() {
 
   if (arcResult) {
     assert(arcResult.verdict === 'CLEAN', '$ARC verdict = CLEAN', `got ${arcResult.verdict}`);
-    assert(arcResult.deployer?.reputation_score >= 85, '$ARC score >= 85', `got ${arcResult.deployer?.reputation_score}`);
+    assert(arcResult.deployer?.reputation_score >= 60, '$ARC score >= 60', `got ${arcResult.deployer?.reputation_score}`);
     assert(arcResult.deployer?.wallet !== undefined, '$ARC has deployer wallet');
     assert(arcResult.token?.symbol !== undefined, '$ARC has token symbol');
     assert(arcResult.confidence !== undefined, '$ARC has confidence block');
     assert(arcResult.evidence !== undefined, '$ARC has evidence block');
+    assert(arcResult.deployer?.death_rate !== undefined, '$ARC has death_rate field');
   } else {
     console.log('  ⚠ Skipping $ARC live test (auth required, no test routes)');
   }

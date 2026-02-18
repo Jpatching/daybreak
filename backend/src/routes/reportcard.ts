@@ -2,8 +2,8 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { isValidSolanaAddress } from '../utils/validate';
-import { renderTwitterCard, renderHistoryCard } from '../services/reportcard';
-import { saveReportCard, getReportCard, getRecentCards } from '../services/db';
+import { renderTwitterCard, renderHistoryCard, renderThesisCard } from '../services/reportcard';
+import { saveReportCard, getReportCard, getRecentCards, getStats } from '../services/db';
 
 const router = Router();
 const CARDS_DIR = path.resolve(__dirname, '../../data/cards');
@@ -78,6 +78,28 @@ router.get('/:token/history.png', (req: Request, res: Response) => {
 });
 
 /**
+ * GET /:token/thesis.png — serve cached thesis card PNG
+ * Public, no auth needed.
+ */
+router.get('/:token/thesis.png', (req: Request, res: Response) => {
+  const token = req.params.token as string;
+  if (!isValidSolanaAddress(token)) {
+    res.status(400).json({ error: 'Invalid Solana address' });
+    return;
+  }
+
+  const record = getReportCard(token, 'thesis');
+  if (!record || !fs.existsSync(record.image_path)) {
+    res.status(404).json({ error: 'Thesis card not generated yet. Use POST /api/v1/report/bot/:token to generate.' });
+    return;
+  }
+
+  res.set('Content-Type', 'image/png');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.sendFile(path.resolve(record.image_path));
+});
+
+/**
  * GET /:token — return JSON metadata about generated cards
  * Public, no auth needed.
  */
@@ -90,8 +112,9 @@ router.get('/:token', (req: Request, res: Response) => {
 
   const twitter = getReportCard(token, 'twitter');
   const history = getReportCard(token, 'history');
+  const thesis = getReportCard(token, 'thesis');
 
-  if (!twitter && !history) {
+  if (!twitter && !history && !thesis) {
     res.status(404).json({ error: 'No report cards generated for this token.' });
     return;
   }
@@ -108,6 +131,10 @@ router.get('/:token', (req: Request, res: Response) => {
       history: history ? {
         url: `/api/v1/report/${token}/history.png`,
         generated_at: history.generated_at,
+      } : null,
+      thesis: thesis ? {
+        url: `/api/v1/report/${token}/thesis.png`,
+        generated_at: thesis.generated_at,
       } : null,
     },
   });
@@ -141,24 +168,31 @@ router.post('/bot/:token', async (req: Request, res: Response) => {
 
     const scan = await scanRes.json() as import('../types').DeployerScan;
 
-    // Render both cards in parallel
-    const [twitterBuf, historyBuf] = await Promise.all([
+    // Get scan stats for thesis card
+    const stats = getStats();
+
+    // Render all 3 cards in parallel
+    const [twitterBuf, historyBuf, thesisBuf] = await Promise.all([
       renderTwitterCard(scan),
       renderHistoryCard(scan),
+      renderThesisCard(stats.total_scans),
     ]);
 
     // Save to disk
     const cardDir = ensureCardDir(token);
     const twitterPath = path.join(cardDir, 'twitter.png');
     const historyPath = path.join(cardDir, 'history.png');
+    const thesisPath = path.join(cardDir, 'thesis.png');
     fs.writeFileSync(twitterPath, twitterBuf);
     fs.writeFileSync(historyPath, historyBuf);
+    fs.writeFileSync(thesisPath, thesisBuf);
 
     // Save to DB
     saveReportCard(token, 'twitter', twitterPath, scan.verdict, scan.deployer.reputation_score);
     saveReportCard(token, 'history', historyPath, scan.verdict, scan.deployer.reputation_score);
+    saveReportCard(token, 'thesis', thesisPath, scan.verdict, scan.deployer.reputation_score);
 
-    console.log(`[reportcard] Generated cards for ${token} (${scan.verdict}, score=${scan.deployer.reputation_score})`);
+    console.log(`[reportcard] Generated 3 cards for ${token} (${scan.verdict}, score=${scan.deployer.reputation_score})`);
 
     res.json({
       token_address: token,
@@ -174,6 +208,11 @@ router.post('/bot/:token', async (req: Request, res: Response) => {
           url: `/api/v1/report/${token}/history.png`,
           generated_at: new Date().toISOString(),
           size_bytes: historyBuf.length,
+        },
+        thesis: {
+          url: `/api/v1/report/${token}/thesis.png`,
+          generated_at: new Date().toISOString(),
+          size_bytes: thesisBuf.length,
         },
       },
     });

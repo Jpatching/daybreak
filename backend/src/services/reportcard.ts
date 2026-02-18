@@ -4,6 +4,7 @@ import path from 'path';
 import type { DeployerScan } from '../types';
 
 const TEMPLATES_DIR = path.resolve(__dirname, '../../templates');
+const FONTS_DIR = path.resolve(TEMPLATES_DIR, 'fonts');
 
 // Singleton browser instance — reused across renders
 let browser: Browser | null = null;
@@ -26,13 +27,15 @@ function applyReplacements(html: string, replacements: Record<string, string>): 
   return result;
 }
 
-/** Core render function — shared by both card types */
+/** Core render function — shared by all card types */
 async function renderTemplate(
   templatePath: string,
   replacements: Record<string, string>,
   viewport: { width: number; height: number },
 ): Promise<Buffer> {
   const templateHtml = fs.readFileSync(templatePath, 'utf-8');
+  // Always inject fonts directory path
+  replacements.FONTS_DIR = `file://${FONTS_DIR}`;
   const html = applyReplacements(templateHtml, replacements);
 
   const b = await getBrowser();
@@ -41,6 +44,8 @@ async function renderTemplate(
   try {
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: 'load' });
+    // Wait for fonts to load
+    await page.evaluate('document.fonts.ready');
 
     const screenshot = await page.screenshot({
       type: 'png',
@@ -56,12 +61,10 @@ async function renderTemplate(
 /** Color class based on thresholds */
 function colorClass(value: number, dangerThreshold: number, warnThreshold: number, invert = false): string {
   if (invert) {
-    // Higher is better (e.g. score)
     if (value < dangerThreshold) return 'danger';
     if (value < warnThreshold) return 'warn';
     return 'safe';
   }
-  // Higher is worse (e.g. rug rate, dead count)
   if (value > dangerThreshold) return 'danger';
   if (value > warnThreshold) return 'warn';
   return 'safe';
@@ -74,6 +77,16 @@ function truncAddr(addr: string | null): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+/** Format date as "MMM YYYY" */
+function formatMonthYear(iso: string | null): string {
+  if (!iso) return 'Unknown';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  } catch {
+    return 'Unknown';
+  }
+}
+
 /** Format date for display */
 function formatDate(iso: string | null): string {
   if (!iso) return 'Unknown';
@@ -84,34 +97,58 @@ function formatDate(iso: string | null): string {
   }
 }
 
+/** Format liquidity as $X,XXX or $X.XK or $X.XM */
+function formatLiquidity(liq: number): string {
+  if (liq >= 1e6) return `$${(liq / 1e6).toFixed(1)}M`;
+  if (liq >= 1e3) return `$${(liq / 1e3).toFixed(0)}K`;
+  if (liq > 0) return `$${Math.round(liq).toLocaleString()}`;
+  return '$0';
+}
+
 /** Render a Twitter summary card (1200x675) from a DeployerScan */
 export async function renderTwitterCard(scan: DeployerScan): Promise<Buffer> {
-  const rugPct = Math.round(scan.deployer.rug_rate * 100);
+  const deathRate = scan.deployer.death_rate ?? scan.deployer.rug_rate;
+  const deathPct = Math.round(deathRate * 100);
   const verdictClass = scan.verdict === 'SERIAL_RUGGER' ? 'serial-rugger'
     : scan.verdict === 'SUSPICIOUS' ? 'suspicious'
     : 'clean';
+
+  // Top bar gradient: red proportional to death rate, teal for remainder
+  const redPct = Math.round(deathRate * 100);
+  const topBarGradient = `linear-gradient(90deg, #E63946 0%, #E63946 ${redPct}%, #2A9D8F ${redPct}%, #2A9D8F 100%)`;
+
+  const deployerLine = `Deployer: ${truncAddr(scan.deployer.wallet)} — Active since ${formatMonthYear(scan.deployer.first_seen)} — Funded by ${truncAddr(scan.funding.source_wallet)}`;
+
+  const burnerBadge = scan.deployer.deployer_is_burner
+    ? '<span class="burner-badge">BURNER WALLET</span>'
+    : '';
+
+  const unverifiedNote = scan.deployer.tokens_unverified > 0
+    ? ` · ${scan.deployer.tokens_unverified} unverified`
+    : '';
 
   const clusterInfo = scan.funding.other_deployers_funded > 0
     ? `${scan.funding.other_deployers_funded} linked deployers`
     : 'No cluster detected';
 
+  const footerLeft = `Scanned ${formatDate(scan.scanned_at)} — ${scan.deployer.tokens_dead} dead${unverifiedNote} — ${clusterInfo}`;
+
   const replacements: Record<string, string> = {
     VERDICT_CLASS: verdictClass,
     VERDICT_TEXT: scan.verdict.replace('_', ' '),
-    TOKEN_NAME: scan.token.name,
-    TOKEN_SYMBOL: scan.token.symbol,
-    DEPLOYER_ADDR: truncAddr(scan.deployer.wallet),
-    FIRST_SEEN: formatDate(scan.deployer.first_seen),
-    FUNDER_ADDR: truncAddr(scan.funding.source_wallet),
+    TOKEN_NAME: escapeHtml(scan.token.name),
+    TOKEN_SYMBOL: escapeHtml(scan.token.symbol),
+    DEPLOYER_LINE: deployerLine,
+    BURNER_BADGE: burnerBadge,
     TOKENS_CREATED: String(scan.deployer.tokens_created),
-    TOKENS_DEAD: String(scan.deployer.tokens_dead + (scan.deployer.tokens_assumed_dead || 0)),
-    RUG_RATE: `${rugPct}%`,
-    REPUTATION_SCORE: String(scan.deployer.reputation_score),
+    TOKENS_DEAD: String(scan.deployer.tokens_dead),
+    DEATH_RATE: `${deathPct}%`,
+    TRUST_SCORE: `${scan.deployer.reputation_score}/100`,
     STAT_COLOR_DEAD: colorClass(scan.deployer.tokens_dead, 10, 3, false),
-    STAT_COLOR_RUG: colorClass(rugPct, 70, 30, false),
+    STAT_COLOR_RATE: colorClass(deathPct, 70, 30, false),
     STAT_COLOR_SCORE: colorClass(scan.deployer.reputation_score, 30, 60, true),
-    SCAN_DATE: formatDate(scan.scanned_at),
-    CLUSTER_INFO: clusterInfo,
+    FOOTER_LEFT: footerLeft,
+    TOP_BAR_GRADIENT: topBarGradient,
   };
 
   return renderTemplate(
@@ -127,34 +164,49 @@ export async function renderHistoryCard(scan: DeployerScan): Promise<Buffer> {
 
   const tokenGridHtml = tokens.map(t => {
     const statusClass = t.alive ? 'alive' : 'dead';
-    const statusText = t.alive ? 'Active' : 'Dead';
-    return `<div class="token-entry ${statusClass}">
-      <div class="token-entry-name">${escapeHtml(t.name)}</div>
-      <div class="token-entry-symbol">$${escapeHtml(t.symbol)}</div>
-      <div class="token-entry-status ${statusClass}">${statusText}</div>
+    const statusIcon = t.alive ? '●' : '✕';
+    const statusText = t.alive ? 'Alive' : 'Dead';
+    return `<div class="token ${statusClass}">
+      <div class="token-name">${escapeHtml(t.name)}</div>
+      <div class="token-symbol">${escapeHtml(t.symbol)}</div>
+      <div class="token-status ${statusClass}">${statusIcon} ${statusText}</div>
+      <div class="token-liq">${formatLiquidity(t.liquidity)}</div>
     </div>`;
   }).join('\n    ');
 
-  const totalShown = tokens.length;
-  const totalAll = scan.deployer.tokens_created;
-  const summaryText = totalAll > 20
-    ? `Showing ${totalShown} of ${totalAll} tokens | ${scan.deployer.tokens_dead} dead | Score: ${scan.deployer.reputation_score}/100`
-    : `${totalAll} tokens | ${scan.deployer.tokens_dead} dead | Score: ${scan.deployer.reputation_score}/100`;
+  const aliveCount = tokens.filter(t => t.alive).length;
+  const deadTokenCount = tokens.filter(t => !t.alive).length;
+  const summaryText = `${aliveCount} survived. <em>${deadTokenCount} didn't.</em>`;
+
+  const historyTitle = `Deployer's Token History — ${scan.deployer.tokens_created} tokens since ${formatMonthYear(scan.deployer.first_seen)}`;
 
   const replacements: Record<string, string> = {
-    HISTORY_TITLE: `${scan.token.name} ($${scan.token.symbol}) Deployer`,
+    HISTORY_TITLE: historyTitle,
     TOKEN_GRID: tokenGridHtml,
     SUMMARY_TEXT: summaryText,
   };
 
-  // Calculate height based on token count: 4 per row, ~80px per row + header/footer
-  const rows = Math.ceil(tokens.length / 4);
-  const height = Math.max(675, 220 + rows * 92);
+  // Calculate height based on token count: 5 per row, ~100px per row + header/footer
+  const rows = Math.ceil(tokens.length / 5);
+  const height = Math.max(675, 200 + rows * 100);
 
   return renderTemplate(
     path.join(TEMPLATES_DIR, 'history-card.html'),
     replacements,
     { width: 1200, height },
+  );
+}
+
+/** Render a thesis/brand card (1200x675) */
+export async function renderThesisCard(totalScans: number): Promise<Buffer> {
+  const replacements: Record<string, string> = {
+    TOTAL_SCANS: totalScans > 0 ? totalScans.toLocaleString() : '0',
+  };
+
+  return renderTemplate(
+    path.join(TEMPLATES_DIR, 'thesis-card.html'),
+    replacements,
+    { width: 1200, height: 675 },
   );
 }
 

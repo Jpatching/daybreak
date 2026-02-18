@@ -26,11 +26,12 @@ vi.mock('../services/helius', () => ({
   getTokenMetadata: mockGetTokenMetadata,
   findFundingSource: mockFindFundingSource,
   getSignaturesForAddress: mockGetSignaturesForAddress,
-  analyzeCluster: vi.fn().mockResolvedValue({ deployerCount: 0 }),
+  analyzeCluster: vi.fn().mockResolvedValue({ deployerCount: 0, fromCex: false, cexName: null, fundedWallets: [] }),
   checkMintAuthority: mockCheckMintAuthority,
   checkDeployerHoldings: vi.fn().mockResolvedValue(null),
   checkTopHolders: vi.fn().mockResolvedValue(null),
   checkBundledLaunch: vi.fn().mockResolvedValue(null),
+  getWalletSolBalance: vi.fn().mockResolvedValue(1.5),
 }));
 
 vi.mock('../services/dexscreener', () => ({
@@ -43,6 +44,32 @@ vi.mock('../services/db', () => ({
   resetDailyUsage: vi.fn(),
   isAdmin: vi.fn().mockReturnValue(false),
   setAdmin: vi.fn(),
+  logScan: vi.fn(),
+  getGuestUsage: vi.fn().mockReturnValue({ scansToday: 0, totalScans: 0, lastReset: '2026-01-01' }),
+  checkGuestRateLimit: vi.fn().mockReturnValue(true),
+  incrementGuestUsage: vi.fn(),
+  getStats: vi.fn().mockReturnValue({ total_scans: 0, total_tokens: 0, verdicts: { CLEAN: 0, SUSPICIOUS: 0, SERIAL_RUGGER: 0 } }),
+  getCachedDeployerTokens: vi.fn().mockReturnValue(null),
+  upsertDeployerTokens: vi.fn(),
+  getStaleAliveTokens: vi.fn().mockReturnValue([]),
+  markTokenDead: vi.fn(),
+}));
+
+vi.mock('../services/jupiter', () => ({
+  getTokenPrice: vi.fn().mockResolvedValue(0.05),
+  getTokenPrices: vi.fn().mockResolvedValue(new Map()),
+}));
+
+vi.mock('../services/rugcheck', () => ({
+  getTokenReport: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../services/pumpportal', () => ({
+  startPumpPortal: vi.fn(),
+  stopPumpPortal: vi.fn(),
+  getRecentNewTokens: vi.fn().mockReturnValue([]),
+  getRecentMigrations: vi.fn().mockReturnValue([]),
+  getPumpPortalStatus: vi.fn().mockReturnValue({ connected: false, newTokenCount: 0, migrationCount: 0 }),
 }));
 
 import { app } from '../index';
@@ -63,12 +90,12 @@ describe('Edge cases', () => {
   it('handles zero-token deployer: 0 tokens, 0 rug rate, CLEAN verdict', async () => {
     mockGetTokenMetadata.mockResolvedValue({ name: 'Ghost Token', symbol: 'GHOST' });
     mockFindDeployer.mockResolvedValue({ wallet: DEPLOYER_WALLET, creationSig: 'sig1', method: 'enhanced_api' });
-    mockFindDeployerTokens.mockResolvedValue([]);
+    mockFindDeployerTokens.mockResolvedValue({ tokens: [], limitReached: false });
     // Safety net adds the scanned token back, so bulkCheckTokens is called with [EDGE_ADDR1]
     mockBulkCheckTokens.mockResolvedValue(new Map([
       [EDGE_ADDR1, { alive: true, liquidity: 1000, volume24h: 50, name: 'Ghost Token', symbol: 'GHOST', pairCreatedAt: new Date().toISOString() }],
     ]));
-    mockFindFundingSource.mockResolvedValue(null);
+    mockFindFundingSource.mockResolvedValue({ wallet: null, timestamp: null });
     mockGetSignaturesForAddress.mockResolvedValue([]);
     mockCheckMintAuthority.mockResolvedValue(null);
 
@@ -86,11 +113,11 @@ describe('Edge cases', () => {
   it('safety net includes scanned token even when deployer history is empty', async () => {
     mockGetTokenMetadata.mockResolvedValue({ name: 'Orphan', symbol: 'ORPH' });
     mockFindDeployer.mockResolvedValue({ wallet: DEPLOYER_WALLET, creationSig: 'sig2', method: 'rpc_fallback' });
-    mockFindDeployerTokens.mockResolvedValue([]); // empty history
+    mockFindDeployerTokens.mockResolvedValue({ tokens: [], limitReached: false }); // empty history
     mockBulkCheckTokens.mockResolvedValue(new Map([
       [EDGE_ADDR2, { alive: true, liquidity: 200, volume24h: 0, name: 'Orphan', symbol: 'ORPH', pairCreatedAt: new Date().toISOString() }],
     ]));
-    mockFindFundingSource.mockResolvedValue(null);
+    mockFindFundingSource.mockResolvedValue({ wallet: null, timestamp: null });
     mockGetSignaturesForAddress.mockResolvedValue([]);
     mockCheckMintAuthority.mockResolvedValue(null);
 
@@ -109,11 +136,11 @@ describe('Edge cases', () => {
     const recentTimestamp = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2h ago
     mockGetTokenMetadata.mockResolvedValue({ name: 'Fresh', symbol: 'FRESH' });
     mockFindDeployer.mockResolvedValue({ wallet: DEPLOYER_WALLET, creationSig: 'sig3', method: 'enhanced_api' });
-    mockFindDeployerTokens.mockResolvedValue([EDGE_ADDR3]);
+    mockFindDeployerTokens.mockResolvedValue({ tokens: [EDGE_ADDR3], limitReached: false });
     mockBulkCheckTokens.mockResolvedValue(new Map([
       [EDGE_ADDR3, { alive: true, liquidity: 0, volume24h: 0, name: 'Fresh', symbol: 'FRESH', pairCreatedAt: recentTimestamp }],
     ]));
-    mockFindFundingSource.mockResolvedValue(null);
+    mockFindFundingSource.mockResolvedValue({ wallet: null, timestamp: null });
     mockGetSignaturesForAddress.mockResolvedValue([]);
     mockCheckMintAuthority.mockResolvedValue(null);
 

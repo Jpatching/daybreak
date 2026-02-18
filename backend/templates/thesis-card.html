@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face { font-family: 'Instrument Serif'; src: url('{{FONTS_DIR}}/instrument-serif-regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
+  @font-face { font-family: 'Instrument Serif'; src: url('{{FONTS_DIR}}/instrument-serif-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; }
+  @font-face { font-family: 'Space Mono'; src: url('{{FONTS_DIR}}/space-mono-400.woff2') format('woff2'); font-weight: 400; }
+  @font-face { font-family: 'Space Mono'; src: url('{{FONTS_DIR}}/space-mono-700.woff2') format('woff2'); font-weight: 700; }
+  @font-face { font-family: 'DM Sans'; src: url('{{FONTS_DIR}}/dm-sans-variable.woff2') format('woff2'); font-weight: 300 700; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 675px;
+    background: #FAFAF7;
+    color: #0A0A0F;
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  .card {
+    width: 1200px;
+    height: 675px;
+    padding: 72px 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: #0A0A0F;
+  }
+
+  .top { display: flex; flex-direction: column; gap: 20px; }
+
+  .brand {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #999;
+  }
+
+  .headline {
+    font-family: 'Instrument Serif', serif;
+    font-size: 56px;
+    line-height: 1.15;
+    color: #0A0A0F;
+    max-width: 900px;
+  }
+
+  .headline em {
+    font-style: italic;
+    color: #E63946;
+  }
+
+  .sub {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 22px;
+    font-weight: 300;
+    color: #666;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+
+  .stats {
+    display: flex;
+    gap: 0;
+  }
+
+  .stat {
+    flex: 1;
+    padding: 24px 0;
+    border-top: 1px solid #DDD;
+  }
+
+  .stat:not(:last-child) {
+    border-right: 1px solid #DDD;
+    padding-right: 40px;
+  }
+
+  .stat:not(:first-child) {
+    padding-left: 40px;
+  }
+
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 36px;
+    font-weight: 700;
+    color: #0A0A0F;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #999;
+    margin-top: 6px;
+  }
+
+  .bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .evolution {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .evo-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: #BBB;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #DDD;
+    flex-shrink: 0;
+  }
+
+  .evo-item.active .dot { background: #E63946; }
+  .evo-item.active { color: #0A0A0F; font-weight: 700; }
+
+  .brand-block { text-align: right; }
+
+  .brand-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0A0A0F;
+    letter-spacing: 2px;
+  }
+
+  .brand-url {
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="top">
+    <div class="brand">DAYBREAK</div>
+    <div class="headline">
+      Every tool tells you if the <em>contract</em> is safe.<br>
+      None tell you if the <em>deployer</em> has rugged before.
+    </div>
+    <div class="sub">
+      Deployer reputation scoring for Solana. Full wallet history, funding cluster analysis, and on-chain verdicts — for humans and AI agents.
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">98.6%</div>
+      <div class="stat-label">Pump.fun tokens exhibit rug behavior</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{TOTAL_SCANS}}</div>
+      <div class="stat-label">Deployers scanned by Daybreak</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">1</div>
+      <div class="stat-label">Now there's Daybreak</div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="evolution">
+      <div class="evo-item">
+        <span class="dot"></span>
+        RugCheck — Contract security
+      </div>
+      <div class="evo-item">
+        <span class="dot"></span>
+        TrenchyBot — Bundle detection
+      </div>
+      <div class="evo-item">
+        <span class="dot"></span>
+        Solsniffer — Token scoring
+      </div>
+      <div class="evo-item active">
+        <span class="dot"></span>
+        Daybreak — Deployer reputation
+      </div>
+    </div>
+    <div class="brand-block">
+      <div class="brand-name">DAYBREAK</div>
+      <div class="brand-url">daybreakscan.com</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

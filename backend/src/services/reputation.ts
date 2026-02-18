@@ -7,11 +7,14 @@ export interface RiskPenalties {
   bundleDetected: boolean;        // -5 points
   deployerHoldingsPct: number | null; // >50% -10, >30% -5, >10% -3
   deployVelocity: number | null;  // >5/day -10, >2/day -5, >1/day -3
+  deployerIsBurner: boolean;      // -10 points
 }
 
 interface ReputationInput {
-  rugRate: number;         // 0.0 - 1.0
+  deathRate: number;       // 0.0 - 1.0 (only verified tokens)
+  rugRate: number;         // 0.0 - 1.0 (legacy: includes unverified)
   tokenCount: number;      // total tokens created
+  verifiedCount: number;   // tokens with DexScreener data
   avgLifespanDays: number; // average days tokens survived
   clusterSize: number;     // number of related deployers in funding cluster
   riskPenalties?: RiskPenalties;
@@ -23,20 +26,28 @@ interface ReputationResult {
   breakdown: ScoreBreakdown;
 }
 
+// Bayesian prior: pump.fun base death rate
+const PRIOR_RATE = 0.5;
+const PRIOR_WEIGHT = 5; // equivalent sample size
+
 export function calculateReputation(input: ReputationInput): ReputationResult {
   const details: string[] = [];
 
-  // Rug rate component (40% weight) — higher rug rate = lower score
-  const rugComponent = Math.round(((1 - input.rugRate) * 40) * 10) / 10;
-  details.push(`Rug rate ${(input.rugRate * 100).toFixed(1)}%: ${rugComponent.toFixed(1)} / 40 points`);
+  // Bayesian regression: weight death rate by sample size
+  const bayesianRate = (input.deathRate * input.verifiedCount + PRIOR_RATE * PRIOR_WEIGHT)
+                     / (input.verifiedCount + PRIOR_WEIGHT);
+
+  // Death rate component (40% weight) — higher rate = lower score
+  const deathComponent = Math.round(((1 - bayesianRate) * 40) * 10) / 10;
+  details.push(`Death rate ${(input.deathRate * 100).toFixed(1)}% (Bayesian: ${(bayesianRate * 100).toFixed(1)}%): ${deathComponent.toFixed(1)} / 40 points`);
 
   // Token count penalty (20% weight) — more tokens = more suspicious (log scale)
-  // Scale penalty by rug rate: many tokens is only suspicious if most are dead
+  // Scale penalty by death rate: many tokens is only suspicious if most are dead
   const baseTokenPenalty = Math.max(0, 20 * (1 - Math.log10(Math.max(1, input.tokenCount)) / 3));
   const lostPoints = 20 - baseTokenPenalty;
-  const rugScaleFactor = Math.min(1, input.rugRate / 0.5);
+  const rugScaleFactor = Math.min(1, bayesianRate / 0.5);
   const tokenPenalty = Math.round((20 - lostPoints * rugScaleFactor) * 10) / 10;
-  details.push(`${input.tokenCount} tokens created: ${tokenPenalty.toFixed(1)} / 20 points${rugScaleFactor < 1 ? ' (scaled by rug rate)' : ''}`);
+  details.push(`${input.tokenCount} tokens created: ${tokenPenalty.toFixed(1)} / 20 points${rugScaleFactor < 1 ? ' (scaled by death rate)' : ''}`);
 
   // Average lifespan (20% weight) — longer lived tokens = better
   const lifespanScore = Math.round(Math.min(20, input.avgLifespanDays * 0.5) * 10) / 10;
@@ -105,13 +116,19 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
         details.push(`Deploy velocity ${p.deployVelocity.toFixed(1)}/day (>1): -3 points`);
       }
     }
+
+    // Burner wallet penalty
+    if (p.deployerIsBurner) {
+      riskDeduction += 10;
+      details.push('Burner wallet detected (funded <60s before deploy): -10 points');
+    }
   }
 
-  const rawScore = rugComponent + tokenPenalty + lifespanScore + clusterPenalty;
+  const rawScore = deathComponent + tokenPenalty + lifespanScore + clusterPenalty;
   const score = Math.max(0, Math.round(rawScore) - riskDeduction);
 
   const breakdown: ScoreBreakdown = {
-    rug_rate_component: rugComponent,
+    rug_rate_component: deathComponent,
     token_count_component: tokenPenalty,
     lifespan_component: lifespanScore,
     cluster_component: clusterPenalty,
@@ -119,9 +136,9 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
     details,
   };
 
-  // Verdict based on composite score, with rug rate override
+  // Verdict based on composite score, with death rate override
   let verdict: Verdict;
-  if ((input.rugRate > 0.8 && input.tokenCount >= 3) || score < 30) {
+  if ((bayesianRate > 0.8 && input.tokenCount >= 3) || score < 30) {
     verdict = 'SERIAL_RUGGER';
   } else if (score < 60) {
     verdict = 'SUSPICIOUS';

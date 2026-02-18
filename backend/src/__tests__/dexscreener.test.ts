@@ -187,14 +187,14 @@ describe('bulkCheckTokens', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('marks tokens dead but does NOT cache on failed batch (allows retry)', async () => {
+  it('leaves tokens unverified (not in results) on failed batch, allows retry', async () => {
     const addr1 = uniqueAddr();
     const addr2 = uniqueAddr();
 
-    // First call: batch fails
+    // First call: batch fails — tokens left out of results (unverified)
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
     const results1 = await bulkCheckTokens([addr1, addr2]);
-    expect(results1.get(addr1)!.alive).toBe(false);
+    expect(results1.has(addr1)).toBe(false);
 
     // Second call: should NOT be cached, so it fetches again
     mockFetch.mockResolvedValueOnce({
@@ -248,7 +248,7 @@ describe('bulkCheckTokens', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('marks token dead when it has no pairs in bulk response', async () => {
+  it('leaves token out of results (unverified) when it has no pairs in bulk response', async () => {
     const addrWithPairs = uniqueAddr();
     const addrNoPairs = uniqueAddr();
     mockFetch.mockResolvedValueOnce({
@@ -260,6 +260,7 @@ describe('bulkCheckTokens', () => {
 
     const results = await bulkCheckTokens([addrWithPairs, addrNoPairs]);
     expect(results.get(addrWithPairs)!.alive).toBe(true);
-    expect(results.get(addrNoPairs)!.alive).toBe(false);
+    // No DexScreener data → not in results (unverified, not dead)
+    expect(results.has(addrNoPairs)).toBe(false);
   });
 });

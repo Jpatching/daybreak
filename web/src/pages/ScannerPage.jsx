@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '../hooks/useAuth';
-import { scanToken, scanTokenPaid, fetchUsage, PaymentRequiredError } from '../api';
+import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, PaymentRequiredError } from '../api';
 import {
   Search,
   ArrowLeft,
@@ -26,6 +26,10 @@ import {
   ChevronUp,
   Activity,
   Zap,
+  Globe,
+  Lock,
+  Unlock,
+  DollarSign,
 } from 'lucide-react';
 
 // ---------- Branding ----------
@@ -124,7 +128,7 @@ function ScoreBreakdownCard({ breakdown }) {
   if (!breakdown) return null;
 
   const components = [
-    { label: 'Rug Rate', earned: breakdown.rug_rate_component, max: 40 },
+    { label: 'Death Rate', earned: breakdown.rug_rate_component, max: 40 },
     { label: 'Token Count', earned: breakdown.token_count_component, max: 20 },
     { label: 'Lifespan', earned: breakdown.lifespan_component, max: 20 },
     { label: 'Cluster', earned: breakdown.cluster_component, max: 20 },
@@ -181,6 +185,24 @@ function ScoreBreakdownCard({ breakdown }) {
 
 function PaymentPrompt({ paymentInfo, onPay, paying }) {
   if (!paymentInfo) return null;
+
+  // Guest limit reached — show connect wallet prompt
+  if (paymentInfo.guestLimitReached) {
+    return (
+      <div className="text-center py-10">
+        <Wallet className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-white mb-2">Guest scan limit reached</h3>
+        <p className="text-slate-400 text-sm mb-6">
+          Connect your wallet for 3 free scans per day.
+        </p>
+        <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-base !h-12 !px-8 hover:!bg-amber-400 mx-auto" />
+        <p className="text-xs text-slate-600 mt-4">
+          Signature-based auth. No transactions, no funds at risk.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="text-center py-10">
       <CreditCard className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
@@ -290,9 +312,9 @@ export default function ScannerPage() {
     }
   }, [connected, isAuthenticated, authLoading, login]);
 
-  // Scan when URL address changes
+  // Scan when URL address changes (works for both guest and auth)
   useEffect(() => {
-    if (urlAddress && isAuthenticated && token) {
+    if (urlAddress) {
       doScan(urlAddress);
     }
   }, [urlAddress, isAuthenticated, token]);
@@ -310,13 +332,33 @@ export default function ScannerPage() {
     }, 2500);
 
     try {
-      const data = await scanToken(address, token);
+      let data;
+      if (isAuthenticated && token) {
+        // Authenticated scan (3/day)
+        data = await scanToken(address, token);
+      } else {
+        // Guest scan (1/day)
+        data = await guestScanToken(address);
+        if (data.guestLimitReached) {
+          // Show connect wallet prompt instead of payment
+          setPaymentInfo({
+            guestLimitReached: true,
+            priceUsd: data.price_usd || 0.01,
+            details: data.details,
+            address,
+          });
+          return;
+        }
+      }
       setResult(data);
+      // Update document title with verdict
+      if (data.verdict && data.token?.symbol) {
+        document.title = `${data.token.symbol} — ${data.verdict} | Daybreak`;
+      }
       // Update usage from scan response
       if (data.usage) setUsage(data.usage);
     } catch (err) {
       if (err instanceof PaymentRequiredError) {
-        // Show payment prompt instead of error
         setPaymentInfo({
           priceUsd: err.priceUsd || 0.01,
           details: err.details,
@@ -325,7 +367,6 @@ export default function ScannerPage() {
       } else {
         setError(err.message);
       }
-      // Refresh usage on error too (might be rate limited)
       refreshUsage();
     } finally {
       clearInterval(stepInterval);
@@ -412,8 +453,8 @@ export default function ScannerPage() {
     if (query.trim()) navigate(`/scan/${query.trim()}`);
   };
 
-  // Allow scan button even if scans_remaining is 0 (will trigger payment flow)
-  const canScan = isAuthenticated && !scanning;
+  // Allow scan for everyone (guest or authenticated)
+  const canScan = !scanning;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -503,31 +544,30 @@ export default function ScannerPage() {
             </button>
           </form>
 
-          {/* Auth gate */}
-          {!connected && (
-            <div className="text-center py-16">
-              <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 mb-4">Connect your wallet to start scanning</p>
-              <p className="text-xs text-slate-600 mb-6">We verify wallet ownership via message signing. No transactions, no funds at risk.</p>
-              <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-base !h-12 !px-8 hover:!bg-amber-400 mx-auto" />
-            </div>
-          )}
-
           {/* Auth loading */}
           {connected && !isAuthenticated && authLoading && (
-            <div className="text-center py-16">
-              <Loader2 className="w-10 h-10 animate-spin text-amber-400 mx-auto mb-4" />
-              <p className="text-slate-400">Authenticating wallet...</p>
+            <div className="text-center py-4">
+              <Loader2 className="w-6 h-6 animate-spin text-amber-400 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm">Authenticating wallet...</p>
             </div>
           )}
 
           {/* Auth error */}
           {authError && (
-            <div className="text-center py-8">
-              <p className="text-red-400 mb-4">{authError}</p>
-              <button onClick={login} className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg">
+            <div className="text-center py-4">
+              <p className="text-red-400 text-sm mb-2">{authError}</p>
+              <button onClick={login} className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg text-sm">
                 Try Again
               </button>
+            </div>
+          )}
+
+          {/* Guest notice */}
+          {!connected && !scanning && !result && !paymentInfo && !urlAddress && (
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
+              <p className="text-xs text-slate-600 mt-2">1 free scan without wallet. Connect for 3/day.</p>
             </div>
           )}
 
@@ -591,7 +631,7 @@ export default function ScannerPage() {
           {/* Results */}
           {result && !scanning && (
             <div className="space-y-6">
-              {/* Token card */}
+              {/* Token card + market data */}
               <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
                 <div className="flex items-start justify-between flex-wrap gap-4">
                   <div>
@@ -599,6 +639,15 @@ export default function ScannerPage() {
                       <h2 className="text-2xl font-bold text-white">
                         {result.token.name} ({result.token.symbol})
                       </h2>
+                      {result.rugcheck?.risk_level && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          result.rugcheck.risk_level === 'Good' ? 'bg-green-500/20 text-green-400'
+                            : result.rugcheck.risk_level === 'Warning' ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          RugCheck: {result.rugcheck.risk_level}
+                        </span>
+                      )}
                     </div>
                     <a
                       href={solscanUrl(result.token.address)}
@@ -609,6 +658,66 @@ export default function ScannerPage() {
                       {result.token.address}
                       <ExternalLink size={10} />
                     </a>
+                    {/* Market data row */}
+                    {result.market_data && (
+                      <div className="flex flex-wrap gap-4 mt-3">
+                        {result.market_data.price_usd != null && (
+                          <div className="text-sm">
+                            <span className="text-slate-500">Price: </span>
+                            <span className="text-white font-mono">
+                              ${result.market_data.price_usd < 0.01
+                                ? result.market_data.price_usd.toExponential(2)
+                                : result.market_data.price_usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                            </span>
+                          </div>
+                        )}
+                        {result.market_data.price_change_24h != null && (
+                          <div className="text-sm">
+                            <span className="text-slate-500">24h: </span>
+                            <span className={result.market_data.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              {result.market_data.price_change_24h >= 0 ? '+' : ''}{result.market_data.price_change_24h.toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
+                        {result.market_data.volume_24h != null && result.market_data.volume_24h > 0 && (
+                          <div className="text-sm">
+                            <span className="text-slate-500">Vol: </span>
+                            <span className="text-slate-300">${(result.market_data.volume_24h / 1000).toFixed(1)}K</span>
+                          </div>
+                        )}
+                        {result.market_data.fdv != null && (
+                          <div className="text-sm">
+                            <span className="text-slate-500">FDV: </span>
+                            <span className="text-slate-300">${result.market_data.fdv >= 1e6
+                              ? (result.market_data.fdv / 1e6).toFixed(1) + 'M'
+                              : (result.market_data.fdv / 1e3).toFixed(1) + 'K'}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Socials */}
+                    {result.market_data?.socials && (
+                      <div className="flex gap-3 mt-2">
+                        {result.market_data.socials.website && (
+                          <a href={result.market_data.socials.website} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-slate-500 hover:text-amber-400 inline-flex items-center gap-1">
+                            <Globe size={12} /> Website
+                          </a>
+                        )}
+                        {result.market_data.socials.twitter && (
+                          <a href={result.market_data.socials.twitter} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-slate-500 hover:text-amber-400 inline-flex items-center gap-1">
+                            <ExternalLink size={10} /> Twitter
+                          </a>
+                        )}
+                        {result.market_data.socials.telegram && (
+                          <a href={result.market_data.socials.telegram} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-slate-500 hover:text-amber-400 inline-flex items-center gap-1">
+                            <ExternalLink size={10} /> Telegram
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-center">
                     <ReputationGauge score={result.deployer.reputation_score} />
@@ -623,7 +732,7 @@ export default function ScannerPage() {
                   <Shield size={14} />
                   Deployer
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Wallet</div>
                     <a
@@ -635,6 +744,19 @@ export default function ScannerPage() {
                       {truncAddr(result.deployer.wallet)}
                       <ExternalLink size={10} />
                     </a>
+                    {result.deployer.deployer_is_burner && (
+                      <span className="ml-2 px-2 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                        Burner
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">SOL Balance</div>
+                    <div className={`text-lg font-semibold ${
+                      result.deployer.sol_balance != null && result.deployer.sol_balance < 0.1 ? 'text-red-400' : 'text-slate-300'
+                    }`}>
+                      {result.deployer.sol_balance != null ? `${result.deployer.sol_balance.toFixed(2)}` : 'N/A'}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Tokens Created</div>
@@ -644,16 +766,19 @@ export default function ScannerPage() {
                     <div className="text-xs text-slate-500 mb-1">Tokens Dead</div>
                     <div className={`text-lg font-semibold ${result.deployer.tokens_dead > 0 ? 'text-red-400' : 'text-green-400'}`}>
                       {result.deployer.tokens_dead}
+                      {result.deployer.tokens_unverified > 0 && (
+                        <span className="text-xs text-yellow-500 ml-1">+ {result.deployer.tokens_unverified} unverified</span>
+                      )}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 mb-1">Rug Rate</div>
+                    <div className="text-xs text-slate-500 mb-1">Death Rate</div>
                     <div className={`text-lg font-semibold ${
-                      result.deployer.rug_rate > 0.7 ? 'text-red-400'
-                        : result.deployer.rug_rate > 0.3 ? 'text-yellow-400'
+                      (result.deployer.death_rate ?? result.deployer.rug_rate) > 0.7 ? 'text-red-400'
+                        : (result.deployer.death_rate ?? result.deployer.rug_rate) > 0.3 ? 'text-yellow-400'
                         : 'text-green-400'
                     }`}>
-                      {(result.deployer.rug_rate * 100).toFixed(1)}%
+                      {((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}%
                     </div>
                   </div>
                 </div>
@@ -762,12 +887,69 @@ export default function ScannerPage() {
                         </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        result.token_risks.lp_locked === null ? 'bg-slate-500'
+                          : result.token_risks.lp_locked ? 'bg-green-400'
+                          : 'bg-red-400'
+                      }`} />
+                      <div>
+                        <div className="text-xs text-slate-500">LP Locked</div>
+                        <div className={`text-sm font-medium ${
+                          result.token_risks.lp_locked === null ? 'text-slate-400'
+                            : result.token_risks.lp_locked ? 'text-green-400'
+                            : 'text-red-400'
+                        }`}>
+                          {result.token_risks.lp_locked === null
+                            ? 'N/A'
+                            : result.token_risks.lp_locked
+                            ? `Locked${result.token_risks.lp_lock_pct ? ` (${result.token_risks.lp_lock_pct.toFixed(0)}%)` : ''}`
+                            : 'UNLOCKED'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
               {result.token_risks === null && result.confidence?.token_risks_checked === false && (
                 <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
                   <p className="text-xs text-slate-500 text-center">Risk checks unavailable for this token</p>
+                </div>
+              )}
+
+              {/* RugCheck Cross-Reference */}
+              {result.rugcheck && result.rugcheck.risks && result.rugcheck.risks.length > 0 && (
+                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Shield size={14} />
+                    RugCheck Analysis
+                    {result.rugcheck.risk_score != null && (
+                      <span className="text-slate-500 font-normal normal-case ml-2">
+                        Score: {result.rugcheck.risk_score}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="space-y-2">
+                    {result.rugcheck.risks.slice(0, 10).map((risk, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            risk.level === 'good' || risk.level === 'info' ? 'bg-green-400'
+                              : risk.level === 'warn' || risk.level === 'warning' ? 'bg-yellow-400'
+                              : 'bg-red-400'
+                          }`} />
+                          <span className="text-slate-300">{risk.name}</span>
+                        </div>
+                        <span className={`text-xs ${
+                          risk.level === 'good' || risk.level === 'info' ? 'text-green-400'
+                            : risk.level === 'warn' || risk.level === 'warning' ? 'text-yellow-400'
+                            : 'text-red-400'
+                        }`}>
+                          {risk.description || risk.level}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -793,6 +975,8 @@ export default function ScannerPage() {
                           <th className="text-left pb-3 pr-4">Token</th>
                           <th className="text-left pb-3 pr-4">Symbol</th>
                           <th className="text-left pb-3 pr-4">Status</th>
+                          <th className="text-right pb-3 pr-4">Price</th>
+                          <th className="text-right pb-3 pr-4">24h</th>
                           <th className="text-right pb-3 pr-4">Liquidity</th>
                           <th className="text-right pb-3 w-8"></th>
                         </tr>
@@ -819,6 +1003,17 @@ export default function ScannerPage() {
                                 {t.alive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
                                 {t.alive ? 'Alive' : 'Dead'}
                               </span>
+                            </td>
+                            <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
+                              {t.price_usd != null
+                                ? `$${t.price_usd < 0.01 ? t.price_usd.toExponential(1) : t.price_usd.toFixed(4)}`
+                                : '-'}
+                            </td>
+                            <td className={`py-2 pr-4 text-right font-mono text-xs ${
+                              t.price_change_24h == null ? 'text-slate-600'
+                                : t.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {t.price_change_24h != null ? `${t.price_change_24h >= 0 ? '+' : ''}${t.price_change_24h.toFixed(1)}%` : '-'}
                             </td>
                             <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
                               ${t.liquidity?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}
@@ -855,15 +1050,22 @@ export default function ScannerPage() {
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Funding Source</div>
                     {result.funding.source_wallet ? (
-                      <a
-                        href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
-                      >
-                        {truncAddr(result.funding.source_wallet)}
-                        <ExternalLink size={10} />
-                      </a>
+                      <div>
+                        <a
+                          href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
+                        >
+                          {truncAddr(result.funding.source_wallet)}
+                          <ExternalLink size={10} />
+                        </a>
+                        {result.funding.from_cex && result.funding.cex_name && (
+                          <span className="ml-2 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-full">
+                            {result.funding.cex_name}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <div className="text-sm text-slate-600">Unknown</div>
                     )}
@@ -916,10 +1118,10 @@ export default function ScannerPage() {
                     </h3>
                     <p className="text-sm text-slate-400">
                       {result.verdict === 'CLEAN'
-                        ? `This deployer has a ${(result.deployer.rug_rate * 100).toFixed(1)}% rug rate with a reputation score of ${result.deployer.reputation_score}/100. Relatively safe.`
+                        ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate with a trust score of ${result.deployer.reputation_score}/100. Relatively safe.`
                         : result.verdict === 'SUSPICIOUS'
-                        ? `This deployer has a ${(result.deployer.rug_rate * 100).toFixed(1)}% rug rate. Exercise caution before investing.`
-                        : `This deployer has rugged ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${(result.deployer.rug_rate * 100).toFixed(1)}%). Do NOT invest.`}
+                        ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate. Exercise caution before investing.`
+                        : `This deployer has killed ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate). Do NOT invest.`}
                     </p>
                   </div>
                 </div>

@@ -13,12 +13,13 @@ import authRouter from './routes/auth';
 import deployerRouter from './routes/deployer';
 import walletRouter from './routes/wallet';
 import reportcardRouter from './routes/reportcard';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, guestRateLimit } from './middleware/auth';
 import { createX402Middleware, getX402Stats, type X402ServerConfig } from './services/x402';
 import { closeBrowser } from './services/reportcard';
+import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigrations, getPumpPortalStatus } from './services/pumpportal';
 
 // Import db to trigger SQLite init + admin seeding on startup
-import './services/db';
+import { getStats } from './services/db';
 
 export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -70,6 +71,16 @@ app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/report', reportcardRouter);
 
+// Guest tier: IP-based rate limit, no auth (1 scan/day)
+app.use('/api/v1/guest/deployer', guestRateLimit, deployerRouter);
+app.use('/api/v1/guest/wallet', guestRateLimit, walletRouter);
+
+// Public stats endpoint (social proof)
+app.get('/api/v1/stats', (_req, res) => {
+  const stats = getStats();
+  res.json(stats);
+});
+
 // Free tier: wallet auth + rate limit (frontend users)
 app.use('/api/v1/deployer', requireAuth, deployerRouter);
 app.use('/api/v1/wallet', requireAuth, walletRouter);
@@ -105,6 +116,21 @@ app.get('/api/v1/x402/stats', (_req, res) => {
   });
 });
 
+// PumpPortal live data (public, from WebSocket feed)
+app.get('/api/v1/live/new-tokens', (_req, res) => {
+  const limit = Math.min(parseInt((_req.query as any).limit || '50', 10), 100);
+  res.json({ tokens: getRecentNewTokens(limit) });
+});
+
+app.get('/api/v1/live/migrations', (_req, res) => {
+  const limit = Math.min(parseInt((_req.query as any).limit || '50', 10), 100);
+  res.json({ migrations: getRecentMigrations(limit) });
+});
+
+app.get('/api/v1/live/status', (_req, res) => {
+  res.json(getPumpPortalStatus());
+});
+
 // 404 catch-all
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -113,8 +139,14 @@ app.use((_req, res) => {
 // Only start listening when run directly (not imported for testing)
 if (require.main === module) {
   const server = app.listen(PORT, '0.0.0.0', () => {
+    // Start PumpPortal WebSocket for real-time data
+    startPumpPortal();
+
     console.log(`Daybreak API running on port ${PORT}`);
     console.log(`Health: http://localhost:${PORT}/api/v1/health`);
+    console.log(`Guest endpoints: /api/v1/guest/deployer/:token, /api/v1/guest/wallet/:wallet`);
+    console.log(`Stats: http://localhost:${PORT}/api/v1/stats`);
+    console.log(`Live: /api/v1/live/new-tokens, /api/v1/live/migrations, /api/v1/live/status`);
     console.log(`Bot endpoints: /api/v1/bot/deployer/:token, /api/v1/bot/wallet/:wallet`);
     console.log(`Report cards: /api/v1/report/:token, POST /api/v1/report/bot/:token`);
     console.log(`x402 paid endpoints: /api/v1/paid/deployer/:token, /api/v1/paid/wallet/:wallet`);
@@ -124,6 +156,7 @@ if (require.main === module) {
   // Graceful shutdown: close Puppeteer browser
   const shutdown = async () => {
     console.log('\nShutting down...');
+    stopPumpPortal();
     await closeBrowser();
     server.close();
     process.exit(0);

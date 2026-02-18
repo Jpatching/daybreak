@@ -1,4 +1,4 @@
-import type { DexScreenerPair } from '../types';
+import type { DexScreenerPair, TokenSocials } from '../types';
 import { TTLCache } from './cache';
 
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex';
@@ -7,56 +7,131 @@ const ALIVE_LIQUIDITY_THRESHOLD = 100; // USD
 // Cache token status for 2 hours to reduce DexScreener API calls
 const dexCache = new TTLCache<TokenStatus>(7200);
 
-interface TokenStatus {
+export interface TokenStatus {
   alive: boolean;
   liquidity: number;
   volume24h: number;
+  priceUsd: number | null;
+  priceChange24h: number | null;
+  fdv: number | null;
+  marketCap: number | null;
   name: string;
   symbol: string;
   pairCreatedAt: string | null;
+  socials: TokenSocials | null;
+}
+
+function extractSocials(pair: DexScreenerPair): TokenSocials | null {
+  const info = pair.info;
+  if (!info) return null;
+
+  let website: string | null = null;
+  let twitter: string | null = null;
+  let telegram: string | null = null;
+
+  if (info.websites && info.websites.length > 0) {
+    website = info.websites[0].url || null;
+  }
+
+  if (info.socials) {
+    for (const s of info.socials) {
+      if (s.type === 'twitter' && s.url) twitter = s.url;
+      if (s.type === 'telegram' && s.url) telegram = s.url;
+    }
+  }
+
+  if (!website && !twitter && !telegram) return null;
+  return { website, twitter, telegram };
+}
+
+function parsePairs(pairs: DexScreenerPair[]): {
+  totalLiquidity: number;
+  totalVolume24h: number;
+  priceUsd: number | null;
+  priceChange24h: number | null;
+  fdv: number | null;
+  marketCap: number | null;
+  name: string;
+  symbol: string;
+  pairCreatedAt: string | null;
+  socials: TokenSocials | null;
+  isAlive: boolean;
+} {
+  if (pairs.length === 0) {
+    return {
+      totalLiquidity: 0, totalVolume24h: 0, priceUsd: null, priceChange24h: null,
+      fdv: null, marketCap: null, name: '', symbol: '', pairCreatedAt: null,
+      socials: null, isAlive: false,
+    };
+  }
+
+  const totalLiquidity = pairs.reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0);
+  const totalVolume24h = pairs.reduce((sum, p) => sum + (p.volume?.h24 || 0), 0);
+  const bestPair = pairs[0];
+
+  const priceUsd = bestPair.priceUsd ? parseFloat(bestPair.priceUsd) : null;
+  const priceChange24h = bestPair.priceChange?.h24 ?? null;
+  const fdv = bestPair.fdv ?? null;
+  const marketCap = bestPair.marketCap ?? null;
+  const socials = extractSocials(bestPair);
+
+  const ageHours = bestPair.pairCreatedAt
+    ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
+    : Infinity;
+  const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
+  const hasVolume = totalVolume24h > 0;
+  const isNew = ageHours < 24;
+  const isAlive = hasLiquidity || hasVolume || isNew;
+
+  return {
+    totalLiquidity, totalVolume24h, priceUsd, priceChange24h,
+    fdv, marketCap,
+    name: bestPair.baseToken?.name || '',
+    symbol: bestPair.baseToken?.symbol || '',
+    pairCreatedAt: bestPair.pairCreatedAt
+      ? new Date(bestPair.pairCreatedAt).toISOString()
+      : null,
+    socials,
+    isAlive,
+  };
 }
 
 /** Check if a single token is alive or dead based on liquidity */
 export async function checkTokenStatus(mintAddress: string): Promise<TokenStatus> {
   try {
     const res = await fetch(`${DEXSCREENER_API}/tokens/${mintAddress}`);
-    if (!res.ok) return { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
+    if (!res.ok) return deadStatus();
 
     const data: any = await res.json();
     const pairs: DexScreenerPair[] = data.pairs || [];
 
-    if (pairs.length === 0) {
-      return { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
-    }
+    if (pairs.length === 0) return deadStatus();
 
-    const totalLiquidity = pairs.reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0);
-    const totalVolume24h = pairs.reduce((sum, p) => sum + (p.volume?.h24 || 0), 0);
-    const bestPair = pairs[0];
-
-    // A token is alive if it has meaningful liquidity OR active trading volume
-    // Pump.fun bonding curve tokens have $0 liquidity on DexScreener but
-    // still trade actively — volume alone proves the token is alive
-    const ageHours = bestPair.pairCreatedAt
-      ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
-      : Infinity;
-    const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
-    const hasVolume = totalVolume24h > 0;
-    const isNew = ageHours < 24;
-    const isAlive = hasLiquidity || hasVolume || isNew;
-
+    const parsed = parsePairs(pairs);
     return {
-      alive: isAlive,
-      liquidity: totalLiquidity,
-      volume24h: totalVolume24h,
-      name: bestPair.baseToken?.name || '',
-      symbol: bestPair.baseToken?.symbol || '',
-      pairCreatedAt: bestPair.pairCreatedAt
-        ? new Date(bestPair.pairCreatedAt).toISOString()
-        : null,
+      alive: parsed.isAlive,
+      liquidity: parsed.totalLiquidity,
+      volume24h: parsed.totalVolume24h,
+      priceUsd: parsed.priceUsd,
+      priceChange24h: parsed.priceChange24h,
+      fdv: parsed.fdv,
+      marketCap: parsed.marketCap,
+      name: parsed.name,
+      symbol: parsed.symbol,
+      pairCreatedAt: parsed.pairCreatedAt,
+      socials: parsed.socials,
     };
   } catch {
-    return { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
+    return deadStatus();
   }
+}
+
+function deadStatus(): TokenStatus {
+  return {
+    alive: false, liquidity: 0, volume24h: 0,
+    priceUsd: null, priceChange24h: null, fdv: null, marketCap: null,
+    name: '', symbol: '', pairCreatedAt: null, socials: null,
+  };
 }
 
 /** Bulk check multiple tokens — DexScreener allows comma-separated addresses (max 30) */
@@ -78,76 +153,62 @@ export async function bulkCheckTokens(
 
   const batchSize = 30;
 
+  // Split into batches and fetch all in parallel (DexScreener allows 300 req/min)
+  const batches: string[][] = [];
   for (let i = 0; i < uncached.length; i += batchSize) {
-    const batch = uncached.slice(i, i + batchSize);
-    const joined = batch.join(',');
+    batches.push(uncached.slice(i, i + batchSize));
+  }
 
-    try {
-      const res = await fetch(`${DEXSCREENER_API}/tokens/${joined}`);
-      if (!res.ok) {
-        // Mark failed-batch tokens as dead (conservative) — a failed lookup
-        // is more likely a dead/obscure token than a thriving one
-        for (const addr of batch) {
-          const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
-          results.set(addr, dead);
-          // Don't cache — allow retry on next request
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
+      const joined = batch.join(',');
+      try {
+        const res = await fetch(`${DEXSCREENER_API}/tokens/${joined}`);
+        if (!res.ok) {
+          return { batch, pairs: [] as DexScreenerPair[] };
         }
+        const data: any = await res.json();
+        return { batch, pairs: (data.pairs || []) as DexScreenerPair[] };
+      } catch {
+        return { batch, pairs: [] as DexScreenerPair[] };
+      }
+    })
+  );
+
+  for (const { batch, pairs } of batchResults) {
+    // Group pairs by token address
+    const pairsByToken = new Map<string, DexScreenerPair[]>();
+    for (const pair of pairs) {
+      const addr = pair.baseToken?.address;
+      if (!addr) continue;
+      if (!pairsByToken.has(addr)) pairsByToken.set(addr, []);
+      pairsByToken.get(addr)!.push(pair);
+    }
+
+    for (const addr of batch) {
+      const tokenPairs = pairsByToken.get(addr) || [];
+      if (tokenPairs.length === 0) {
+        // No DexScreener data — mark as unverified (NOT dead)
+        // Don't add to results so deployer route can track as unverified
         continue;
       }
 
-      const data: any = await res.json();
-      const pairs: DexScreenerPair[] = data.pairs || [];
-
-      // Group pairs by token address
-      const pairsByToken = new Map<string, DexScreenerPair[]>();
-      for (const pair of pairs) {
-        const addr = pair.baseToken?.address;
-        if (!addr) continue;
-        if (!pairsByToken.has(addr)) pairsByToken.set(addr, []);
-        pairsByToken.get(addr)!.push(pair);
-      }
-
-      for (const addr of batch) {
-        const tokenPairs = pairsByToken.get(addr) || [];
-        if (tokenPairs.length === 0) {
-          const dead = { alive: false, liquidity: 0, volume24h: 0, name: '', symbol: '', pairCreatedAt: null };
-          results.set(addr, dead);
-          dexCache.set(addr, dead);
-          continue;
-        }
-        const totalLiquidity = tokenPairs.reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0);
-        const totalVolume24h = tokenPairs.reduce((sum, p) => sum + (p.volume?.h24 || 0), 0);
-        const bestPair = tokenPairs[0];
-
-        const ageHours = bestPair.pairCreatedAt
-          ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
-          : Infinity;
-        const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
-        const hasVolume = totalVolume24h > 0;
-        const isNew = ageHours < 24;
-        const isAlive = hasLiquidity || hasVolume || isNew;
-
-        const status = {
-          alive: isAlive,
-          liquidity: totalLiquidity,
-          volume24h: totalVolume24h,
-          name: bestPair.baseToken?.name || '',
-          symbol: bestPair.baseToken?.symbol || '',
-          pairCreatedAt: bestPair.pairCreatedAt
-            ? new Date(bestPair.pairCreatedAt).toISOString()
-            : null,
-        };
-        results.set(addr, status);
-        dexCache.set(addr, status);
-      }
-    } catch {
-      // Don't cache error results — leave errored tokens out of results
-      // so they're retried next request and not falsely marked as dead
-    }
-
-    // Small delay between batches to avoid rate limiting
-    if (i + batchSize < uncached.length) {
-      await new Promise(r => setTimeout(r, 200));
+      const parsed = parsePairs(tokenPairs);
+      const status: TokenStatus = {
+        alive: parsed.isAlive,
+        liquidity: parsed.totalLiquidity,
+        volume24h: parsed.totalVolume24h,
+        priceUsd: parsed.priceUsd,
+        priceChange24h: parsed.priceChange24h,
+        fdv: parsed.fdv,
+        marketCap: parsed.marketCap,
+        name: parsed.name,
+        symbol: parsed.symbol,
+        pairCreatedAt: parsed.pairCreatedAt,
+        socials: parsed.socials,
+      };
+      results.set(addr, status);
+      dexCache.set(addr, status);
     }
   }
 

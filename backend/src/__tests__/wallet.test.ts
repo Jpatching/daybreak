@@ -16,13 +16,14 @@ vi.mock('../services/helius', () => ({
   findDeployer: vi.fn(),
   findDeployerTokens: mockFindDeployerTokens,
   getTokenMetadata: mockGetTokenMetadata,
-  findFundingSource: vi.fn().mockResolvedValue(null),
+  findFundingSource: vi.fn().mockResolvedValue({ wallet: null, timestamp: null }),
   getSignaturesForAddress: vi.fn().mockResolvedValue([]),
-  analyzeCluster: vi.fn().mockResolvedValue({ deployerCount: 0 }),
+  analyzeCluster: vi.fn().mockResolvedValue({ deployerCount: 0, fromCex: false, cexName: null, fundedWallets: [] }),
   checkMintAuthority: vi.fn().mockResolvedValue(null),
   checkDeployerHoldings: vi.fn().mockResolvedValue(null),
   checkTopHolders: vi.fn().mockResolvedValue(null),
   checkBundledLaunch: vi.fn().mockResolvedValue(null),
+  getWalletSolBalance: vi.fn().mockResolvedValue(1.5),
 }));
 
 vi.mock('../services/dexscreener', () => ({
@@ -35,6 +36,32 @@ vi.mock('../services/db', () => ({
   resetDailyUsage: vi.fn(),
   isAdmin: vi.fn().mockReturnValue(false),
   setAdmin: vi.fn(),
+  logScan: vi.fn(),
+  getGuestUsage: vi.fn().mockReturnValue({ scansToday: 0, totalScans: 0, lastReset: '2026-01-01' }),
+  checkGuestRateLimit: vi.fn().mockReturnValue(true),
+  incrementGuestUsage: vi.fn(),
+  getStats: vi.fn().mockReturnValue({ total_scans: 0, total_tokens: 0, verdicts: { CLEAN: 0, SUSPICIOUS: 0, SERIAL_RUGGER: 0 } }),
+  getCachedDeployerTokens: vi.fn().mockReturnValue(null),
+  upsertDeployerTokens: vi.fn(),
+  getStaleAliveTokens: vi.fn().mockReturnValue([]),
+  markTokenDead: vi.fn(),
+}));
+
+vi.mock('../services/jupiter', () => ({
+  getTokenPrice: vi.fn().mockResolvedValue(0.05),
+  getTokenPrices: vi.fn().mockResolvedValue(new Map()),
+}));
+
+vi.mock('../services/rugcheck', () => ({
+  getTokenReport: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../services/pumpportal', () => ({
+  startPumpPortal: vi.fn(),
+  stopPumpPortal: vi.fn(),
+  getRecentNewTokens: vi.fn().mockReturnValue([]),
+  getRecentMigrations: vi.fn().mockReturnValue([]),
+  getPumpPortalStatus: vi.fn().mockReturnValue({ connected: false, newTokenCount: 0, migrationCount: 0 }),
 }));
 
 import { app } from '../index';
@@ -50,7 +77,7 @@ describe('Wallet scan endpoint', () => {
   });
 
   it('returns scan result for valid wallet', async () => {
-    mockFindDeployerTokens.mockResolvedValue([]);
+    mockFindDeployerTokens.mockResolvedValue({ tokens: [], limitReached: false });
     mockBulkCheckTokens.mockResolvedValue(new Map());
 
     const res = await request(app)
@@ -77,7 +104,7 @@ describe('Wallet scan endpoint', () => {
 
   it('handles wallet with tokens', async () => {
     const tokenMint = '61V8vBaqAGMpgDQi4JcAwo1dmBGHsyhzodcPqnEVpump';
-    mockFindDeployerTokens.mockResolvedValue([tokenMint]);
+    mockFindDeployerTokens.mockResolvedValue({ tokens: [tokenMint], limitReached: false });
     mockBulkCheckTokens.mockResolvedValue(new Map([
       [tokenMint, { alive: true, liquidity: 1000000, name: 'Test', symbol: 'TST', pairCreatedAt: '2025-01-01T00:00:00.000Z' }],
     ]));

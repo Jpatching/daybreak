@@ -63,6 +63,24 @@ export async function scanWalletPaid(address, paymentHeader) {
   return paidFetch(`${API_BASE}/paid/wallet/${address}`, paymentHeader);
 }
 
+export async function guestScanToken(address) {
+  const res = await fetch(`${API_BASE}/guest/deployer/${address}`);
+  if (res.status === 402) {
+    const data = await res.json();
+    return { guestLimitReached: true, ...data };
+  }
+  if (res.status === 404) throw new Error('NOT_FOUND');
+  if (res.status === 503) throw new Error('SERVICE_UNAVAILABLE');
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchStats() {
+  const res = await fetch(`${API_BASE}/stats`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function checkHealth() {
   return apiFetch(`${API_BASE}/health`);
 }

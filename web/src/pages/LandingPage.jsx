@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import SunriseShader from '../components/SunriseShader';
+import { fetchStats } from '../api';
 import {
   Shield,
   Search,
@@ -454,6 +455,41 @@ function BentoFeaturesSection() {
   );
 }
 
+// ---------- Live Stats ----------
+
+function LiveStats() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetchStats().then(data => { if (data) setStats(data); }).catch(() => {});
+  }, []);
+
+  if (!stats || stats.total_scans === 0) return null;
+
+  const fmt = (n) => new Intl.NumberFormat().format(n);
+
+  return (
+    <div className="flex flex-wrap justify-center gap-6 mt-8">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-amber-400">{fmt(stats.total_scans)}</div>
+        <div className="text-xs text-slate-500">Scans Completed</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-green-400">{fmt(stats.verdicts.CLEAN)}</div>
+        <div className="text-xs text-slate-500">Clean</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-yellow-400">{fmt(stats.verdicts.SUSPICIOUS)}</div>
+        <div className="text-xs text-slate-500">Suspicious</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-red-400">{fmt(stats.verdicts.SERIAL_RUGGER)}</div>
+        <div className="text-xs text-slate-500">Serial Ruggers</div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Main Page ----------
 
 export default function LandingPage() {
@@ -585,6 +621,8 @@ export default function LandingPage() {
                   View on GitHub
                 </a>
               </div>
+
+              <LiveStats />
             </div>
 
             {/* Right - Terminal Preview */}

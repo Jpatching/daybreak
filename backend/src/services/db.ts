@@ -72,6 +72,197 @@ const setAdminStmt = db.prepare(`
   ON CONFLICT(wallet) DO UPDATE SET is_admin = ?
 `);
 
+// Guest usage table (IP-based rate limiting for unauthenticated scans)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS guest_usage (
+    ip TEXT PRIMARY KEY,
+    scans_today INTEGER NOT NULL DEFAULT 0,
+    last_reset TEXT NOT NULL DEFAULT (date('now')),
+    total_scans INTEGER NOT NULL DEFAULT 0
+  )
+`);
+
+// Scan log table (powers social proof stats)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS scan_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_address TEXT NOT NULL,
+    verdict TEXT,
+    score INTEGER,
+    scanned_at TEXT NOT NULL DEFAULT (datetime('now')),
+    source TEXT NOT NULL DEFAULT 'auth'
+  )
+`);
+
+// Guest usage prepared statements
+const getGuestUsageStmt = db.prepare(`
+  SELECT scans_today, total_scans, last_reset FROM guest_usage WHERE ip = ?
+`);
+
+const upsertGuestUsageStmt = db.prepare(`
+  INSERT INTO guest_usage (ip, scans_today, last_reset, total_scans)
+  VALUES (?, 1, date('now'), 1)
+  ON CONFLICT(ip) DO UPDATE SET
+    scans_today = scans_today + 1,
+    total_scans = total_scans + 1
+`);
+
+const resetGuestDailyStmt = db.prepare(`
+  UPDATE guest_usage SET scans_today = 0, last_reset = date('now')
+  WHERE ip = ? AND last_reset < date('now')
+`);
+
+const incrementGuestTransaction = db.transaction((ip: string) => {
+  resetGuestDailyStmt.run(ip);
+  upsertGuestUsageStmt.run(ip);
+});
+
+// Scan log prepared statements
+const insertScanLogStmt = db.prepare(`
+  INSERT INTO scan_log (token_address, verdict, score, source) VALUES (?, ?, ?, ?)
+`);
+
+const getStatsStmt = db.prepare(`
+  SELECT
+    COUNT(*) as total_scans,
+    COUNT(DISTINCT token_address) as total_tokens,
+    SUM(CASE WHEN verdict = 'CLEAN' THEN 1 ELSE 0 END) as clean,
+    SUM(CASE WHEN verdict = 'SUSPICIOUS' THEN 1 ELSE 0 END) as suspicious,
+    SUM(CASE WHEN verdict = 'SERIAL_RUGGER' THEN 1 ELSE 0 END) as serial_rugger
+  FROM scan_log
+`);
+
+export interface GuestUsage {
+  scansToday: number;
+  totalScans: number;
+  lastReset: string;
+}
+
+export function getGuestUsage(ip: string): GuestUsage {
+  const row = getGuestUsageStmt.get(ip) as any;
+  if (!row) {
+    return { scansToday: 0, totalScans: 0, lastReset: new Date().toISOString().slice(0, 10) };
+  }
+  // Auto-reset if last_reset is before today
+  if (row.last_reset < new Date().toISOString().slice(0, 10)) {
+    return { scansToday: 0, totalScans: row.total_scans, lastReset: row.last_reset };
+  }
+  return { scansToday: row.scans_today, totalScans: row.total_scans, lastReset: row.last_reset };
+}
+
+export function checkGuestRateLimit(ip: string): boolean {
+  const usage = getGuestUsage(ip);
+  return usage.scansToday < 1; // 1 free guest scan per day
+}
+
+export function incrementGuestUsage(ip: string): void {
+  incrementGuestTransaction(ip);
+}
+
+export function logScan(tokenAddress: string, verdict: string | null, score: number | null, source: string = 'auth'): void {
+  insertScanLogStmt.run(tokenAddress, verdict, score, source);
+}
+
+export interface ScanStats {
+  total_scans: number;
+  total_tokens: number;
+  verdicts: { CLEAN: number; SUSPICIOUS: number; SERIAL_RUGGER: number };
+}
+
+export function getStats(): ScanStats {
+  const row = getStatsStmt.get() as any;
+  return {
+    total_scans: row.total_scans || 0,
+    total_tokens: row.total_tokens || 0,
+    verdicts: {
+      CLEAN: row.clean || 0,
+      SUSPICIOUS: row.suspicious || 0,
+      SERIAL_RUGGER: row.serial_rugger || 0,
+    },
+  };
+}
+
+// Deployer cache table — caches token lists per deployer wallet
+db.exec(`
+  CREATE TABLE IF NOT EXISTS deployer_cache (
+    deployer_wallet TEXT NOT NULL,
+    token_address TEXT NOT NULL,
+    token_name TEXT,
+    token_symbol TEXT,
+    created_at TEXT,
+    alive INTEGER DEFAULT -1,
+    liquidity REAL DEFAULT 0,
+    last_checked TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (deployer_wallet, token_address)
+  )
+`);
+
+const getCachedDeployerTokensStmt = db.prepare(`
+  SELECT token_address, token_name, token_symbol, created_at, alive, liquidity, last_checked
+  FROM deployer_cache WHERE deployer_wallet = ?
+`);
+
+const upsertDeployerTokenStmt = db.prepare(`
+  INSERT INTO deployer_cache (deployer_wallet, token_address, token_name, token_symbol, created_at, alive, liquidity, last_checked)
+  VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(deployer_wallet, token_address) DO UPDATE SET
+    token_name = excluded.token_name,
+    token_symbol = excluded.token_symbol,
+    created_at = COALESCE(excluded.created_at, deployer_cache.created_at),
+    alive = excluded.alive,
+    liquidity = excluded.liquidity,
+    last_checked = datetime('now')
+`);
+
+const getStaleAliveTokensStmt = db.prepare(`
+  SELECT token_address FROM deployer_cache
+  WHERE deployer_wallet = ? AND alive = 1
+  AND last_checked < datetime('now', '-' || ? || ' hours')
+`);
+
+const markTokenDeadStmt = db.prepare(`
+  UPDATE deployer_cache SET alive = 0, liquidity = 0, last_checked = datetime('now')
+  WHERE token_address = ?
+`);
+
+export interface CachedDeployerToken {
+  token_address: string;
+  token_name: string | null;
+  token_symbol: string | null;
+  created_at: string | null;
+  alive: number; // 0=dead, 1=alive, -1=unverified
+  liquidity: number;
+  last_checked: string;
+}
+
+export function getCachedDeployerTokens(wallet: string): CachedDeployerToken[] {
+  return getCachedDeployerTokensStmt.all(wallet) as CachedDeployerToken[];
+}
+
+const upsertDeployerTokensTransaction = db.transaction(
+  (wallet: string, tokens: Array<{ address: string; name?: string; symbol?: string; created_at?: string | null; alive: number; liquidity: number }>) => {
+    for (const t of tokens) {
+      upsertDeployerTokenStmt.run(wallet, t.address, t.name || null, t.symbol || null, t.created_at || null, t.alive, t.liquidity);
+    }
+  }
+);
+
+export function upsertDeployerTokens(
+  wallet: string,
+  tokens: Array<{ address: string; name?: string; symbol?: string; created_at?: string | null; alive: number; liquidity: number }>
+): void {
+  upsertDeployerTokensTransaction(wallet, tokens);
+}
+
+export function getStaleAliveTokens(wallet: string, maxAgeHours: number = 6): string[] {
+  const rows = getStaleAliveTokensStmt.all(wallet, maxAgeHours) as Array<{ token_address: string }>;
+  return rows.map(r => r.token_address);
+}
+
+export function markTokenDead(address: string): void {
+  markTokenDeadStmt.run(address);
+}
+
 // Report cards table
 db.exec(`
   CREATE TABLE IF NOT EXISTS report_cards (

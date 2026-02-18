@@ -14,6 +14,7 @@ vi.mock('../services/helius', () => ({
   checkDeployerHoldings: vi.fn(),
   checkTopHolders: vi.fn(),
   checkBundledLaunch: vi.fn(),
+  getWalletSolBalance: vi.fn().mockResolvedValue(1.5),
 }));
 
 vi.mock('../services/db', () => ({
@@ -22,6 +23,28 @@ vi.mock('../services/db', () => ({
   resetDailyUsage: vi.fn(),
   isAdmin: vi.fn().mockReturnValue(false),
   setAdmin: vi.fn(),
+  logScan: vi.fn(),
+  getGuestUsage: vi.fn().mockReturnValue({ scansToday: 0, totalScans: 0, lastReset: '2026-01-01' }),
+  checkGuestRateLimit: vi.fn().mockReturnValue(true),
+  incrementGuestUsage: vi.fn(),
+  getStats: vi.fn().mockReturnValue({ total_scans: 0, total_tokens: 0, verdicts: { CLEAN: 0, SUSPICIOUS: 0, SERIAL_RUGGER: 0 } }),
+}));
+
+vi.mock('../services/jupiter', () => ({
+  getTokenPrice: vi.fn().mockResolvedValue(0.05),
+  getTokenPrices: vi.fn().mockResolvedValue(new Map()),
+}));
+
+vi.mock('../services/rugcheck', () => ({
+  getTokenReport: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../services/pumpportal', () => ({
+  startPumpPortal: vi.fn(),
+  stopPumpPortal: vi.fn(),
+  getRecentNewTokens: vi.fn().mockReturnValue([]),
+  getRecentMigrations: vi.fn().mockReturnValue([]),
+  getPumpPortalStatus: vi.fn().mockReturnValue({ connected: false, newTokenCount: 0, migrationCount: 0 }),
 }));
 
 import { app } from '../index';

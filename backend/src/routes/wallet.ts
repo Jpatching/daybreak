@@ -7,10 +7,12 @@ import {
   findFundingSource,
   getSignaturesForAddress,
   analyzeCluster,
+  getWalletSolBalance,
 } from '../services/helius';
 import { bulkCheckTokens } from '../services/dexscreener';
 import { calculateReputation } from '../services/reputation';
 import { TTLCache } from '../services/cache';
+import { logScan } from '../services/db';
 import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
@@ -24,7 +26,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     return;
   }
 
-  // Check cache — clone to avoid mutating shared object, attach fresh usage info
+  // Check cache
   const cached = walletCache.get(wallet_address);
   if (cached) {
     res.json({
@@ -39,11 +41,15 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
   }
 
   try {
-    // Skip token→deployer lookup — go straight to wallet scan
-    const deployerTokenMints = await findDeployerTokens(wallet_address);
+    // Parallel: find tokens + get SOL balance
+    const [tokenResult, walletSolBalance] = await Promise.all([
+      findDeployerTokens(wallet_address),
+      getWalletSolBalance(wallet_address).catch(() => null),
+    ]);
+
+    const deployerTokenMints = tokenResult.tokens;
     const tokenStatuses = await bulkCheckTokens(deployerTokenMints);
 
-    // Build token list — drop unknown tokens entirely
     const tokens: DeployerToken[] = [];
     let deadCount = 0;
     let totalLifespanDays = 0;
@@ -52,7 +58,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     const verifiedMints = deployerTokenMints.filter(mint => tokenStatuses.has(mint));
     const unknownCount = deployerTokenMints.length - verifiedMints.length;
 
-    // Fetch metadata in batches of 5 to avoid flooding RPC
+    // Fetch metadata in batches
     const allMetadata: Array<{ mint: string; name: string; symbol: string }> = [];
     for (let i = 0; i < verifiedMints.length; i += 5) {
       const batch = verifiedMints.slice(i, i + 5);
@@ -73,7 +79,6 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
       if (!isAlive) deadCount++;
 
-      // Count lifespan for ALL tokens with known creation date
       if (status.pairCreatedAt) {
         const created = new Date(status.pairCreatedAt).getTime();
         const days = (Date.now() - created) / (1000 * 60 * 60 * 24);
@@ -87,6 +92,10 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         symbol: sanitizeString(meta.symbol),
         alive: isAlive,
         liquidity: status.liquidity || 0,
+        price_usd: status.priceUsd ?? null,
+        price_change_24h: status.priceChange24h ?? null,
+        volume_24h: status.volume24h || null,
+        fdv: status.fdv ?? null,
         created_at: status.pairCreatedAt || null,
         dexscreener_url: `https://dexscreener.com/solana/${mint}`,
       });
@@ -94,36 +103,42 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
     const totalTokens = deployerTokenMints.length;
     const verifiedCount = verifiedMints.length;
-    // Count unverified tokens as dead (conservative)
+    const deathRate = verifiedCount > 0 ? deadCount / verifiedCount : 0;
     const adjustedDead = deadCount + unknownCount;
     const rugRate = totalTokens > 0 ? adjustedDead / totalTokens : 0;
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
     // Funding trace + cluster analysis
-    const fundingSource = await findFundingSource(wallet_address);
+    const fundingResult = await findFundingSource(wallet_address);
+    const fundingSourceWallet = fundingResult?.wallet || null;
+
     let funding: FundingInfo = {
-      source_wallet: fundingSource,
+      source_wallet: fundingSourceWallet,
       other_deployers_funded: 0,
       cluster_total_tokens: totalTokens,
       cluster_total_dead: adjustedDead,
+      from_cex: false,
+      cex_name: null,
     };
 
     let clusterChecked = false;
-    if (fundingSource) {
+    if (fundingSourceWallet) {
       try {
-        const cluster = await analyzeCluster(fundingSource, wallet_address);
+        const cluster = await analyzeCluster(fundingSourceWallet, wallet_address);
         funding.other_deployers_funded = cluster.deployerCount;
         funding.cluster_total_tokens = totalTokens;
         funding.cluster_total_dead = deadCount;
+        funding.from_cex = cluster.fromCex;
+        funding.cex_name = cluster.cexName;
         clusterChecked = true;
-      } catch {
-        // Cluster analysis is best-effort
-      }
+      } catch { /* best-effort */ }
     }
 
     const { score, verdict, breakdown } = calculateReputation({
+      deathRate,
       rugRate,
       tokenCount: totalTokens,
+      verifiedCount,
       avgLifespanDays: avgLifespan,
       clusterSize: funding.other_deployers_funded,
     });
@@ -142,23 +157,21 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       }, null as string | null);
     } catch { /* best-effort */ }
 
-    // Build evidence links
     const evidence: ScanEvidence = {
       deployer_url: `https://solscan.io/account/${wallet_address}`,
-      funding_source_url: fundingSource ? `https://solscan.io/account/${fundingSource}` : null,
-      creation_tx_url: null, // wallet scan has no single creation tx
+      funding_source_url: fundingSourceWallet ? `https://solscan.io/account/${fundingSourceWallet}` : null,
+      creation_tx_url: null,
     };
 
-    // Build confidence flags
     const confidence: ScanConfidence = {
       tokens_verified: verifiedCount,
       tokens_unverified: unknownCount,
-      deployer_method: 'enhanced_api', // wallet scans always use enhanced API via findDeployerTokens
+      deployer_method: 'enhanced_api',
       cluster_checked: clusterChecked,
-      token_risks_checked: false, // wallet scans have no single target token
+      token_risks_checked: false,
+      tokens_may_be_incomplete: tokenResult.limitReached,
     };
 
-    // Build usage info
     const usage: ScanUsage = {
       scans_used: req.scansUsed || 0,
       scans_limit: req.scansLimit || 3,
@@ -169,13 +182,16 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       token: { address: wallet_address, name: 'Wallet Scan', symbol: 'N/A' },
       deployer: {
         wallet: wallet_address,
+        sol_balance: walletSolBalance,
         tokens_created: totalTokens,
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
         tokens_assumed_dead: unknownCount,
         rug_rate: Math.round(rugRate * 1000) / 1000,
+        death_rate: Math.round(deathRate * 1000) / 1000,
         reputation_score: score,
         deploy_velocity: null,
+        deployer_is_burner: false,
         first_seen: firstSeen,
         last_seen: lastSeen,
         tokens,
@@ -184,6 +200,8 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       verdict,
       score_breakdown: breakdown,
       token_risks: null,
+      market_data: null,
+      rugcheck: null,
       evidence,
       confidence,
       usage,
@@ -191,6 +209,13 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     };
 
     walletCache.set(wallet_address, result);
+
+    const scanSource = req.wallet?.startsWith('guest:') ? 'guest'
+      : req.headers['x-bot-key'] ? 'bot'
+      : req.headers['x-payment'] ? 'x402'
+      : 'auth';
+    logScan(wallet_address, verdict, score, scanSource);
+
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

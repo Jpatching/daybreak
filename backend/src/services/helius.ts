@@ -1,9 +1,21 @@
 import { sanitizeString } from '../utils/sanitize';
 import { TTLCache } from './cache';
+import { basicRpc } from './rpc';
 import type { FindDeployerResult } from '../types';
 
 const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const NATIVE_MINT = 'So11111111111111111111111111111111111111112';
+
+// Known CEX hot wallets on Solana
+const CEX_WALLETS: Record<string, string> = {
+  '2ojv9BAiHUrvsm9gxDe7fJSzbNZSJcxZvf8dqmWGHG8S': 'Binance',
+  'AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2': 'Binance',
+  'H8sMJSCQxfKiFTCfDR3DUMLPwcRbM61LGFJ8N4dK3WjS': 'Coinbase',
+  '2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPicm': 'Coinbase',
+  'GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE': 'Bybit',
+  '5tzFkiKscjHK98YYhQvUDjUG462wVOzGAPz6TuBLgyVM': 'OKX',
+  'HbZ5FfmKWNHC7uwGCA6MrmSfpmJjJtazEiFMTFApHsNa': 'Kraken',
+};
 
 // Cache metadata lookups for 30 minutes to save RPC calls on repeat deployers
 const metadataCache = new TTLCache<{ name: string; symbol: string }>(1800);
@@ -31,14 +43,7 @@ function getEnhancedApiUrl(): string {
 }
 
 async function rpcCall(method: string, params: any[]): Promise<any> {
-  const res = await fetch(getRpcUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const json: any = await res.json();
-  if (json.error) throw new Error(`RPC error: ${json.error.message}`);
-  return json.result;
+  return basicRpc(method, params);
 }
 
 export async function getSignaturesForAddress(
@@ -169,20 +174,21 @@ export async function findDeployer(mintAddress: string): Promise<FindDeployerRes
 
 /**
  * Find all tokens a deployer created via Pump.fun.
- *
- * Strategy: Scan enhanced tx history for CREATE txs from PUMP_FUN source,
- * plus check instructions for Pump.fun program ID. Extract mints from all
- * token transfers and balance changes in matching txs.
- *
- * Much more reliable than the old endsWith('pump') heuristic — catches all
- * Pump.fun tokens regardless of mint address format.
+ * Paginates to 5000 transactions (up from 1000).
+ * Returns { tokens, limitReached }.
  */
-export async function findDeployerTokens(deployerWallet: string): Promise<string[]> {
+export async function findDeployerTokens(
+  deployerWallet: string
+): Promise<{ tokens: string[]; limitReached: boolean }> {
   const confirmedMints = new Set<string>();
+  const MAX_TX = 5000;
+  let totalTx = 0;
 
   // Strategy 1: Enhanced API — scan for Pump.fun CREATE txs directly
   let before: string | undefined;
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 50; page++) { // 50 pages * 100 = 5000 max
+    if (totalTx >= MAX_TX) break;
+
     const txs = await getEnhancedTransactions(deployerWallet, {
       limit: 100,
       before,
@@ -192,7 +198,6 @@ export async function findDeployerTokens(deployerWallet: string): Promise<string
 
     for (const tx of txs) {
       // Only count tokens the deployer CREATED, not traded
-      // A deployer must be the feePayer on the creation tx
       if (tx.feePayer !== deployerWallet) continue;
 
       const isPumpSource = tx.source === 'PUMP_FUN';
@@ -210,8 +215,6 @@ export async function findDeployerTokens(deployerWallet: string): Promise<string
       if (isPumpCreate) {
         // Confirmed Pump.fun creation — extract mints below
       } else if (hasPumpInstruction && (tx.type === 'UNKNOWN' || tx.type === 'COMPRESSED_NFT_MINT')) {
-        // Newer Pump.fun versions may emit non-standard types;
-        // check for initializeMint2 in instructions to confirm creation
         const hasInitMint = (tx.instructions || []).some(
           (ix: any) =>
             ix.parsed?.type === 'initializeMint2' ||
@@ -219,7 +222,6 @@ export async function findDeployerTokens(deployerWallet: string): Promise<string
         );
         if (!hasInitMint) continue;
       } else {
-        // Not a creation tx — skip buys, sells, etc.
         continue;
       }
 
@@ -244,15 +246,17 @@ export async function findDeployerTokens(deployerWallet: string): Promise<string
     }
 
     before = txs[txs.length - 1]?.signature;
+    totalTx += txs.length;
     if (txs.length < 100) break;
   }
 
   if (confirmedMints.size === 0) {
     // Fallback: RPC scan for deployers with no enhanced API data
-    return findDeployerTokensRpc(deployerWallet);
+    const fallbackTokens = await findDeployerTokensRpc(deployerWallet);
+    return { tokens: fallbackTokens, limitReached: false };
   }
 
-  return Array.from(confirmedMints);
+  return { tokens: Array.from(confirmedMints), limitReached: totalTx >= MAX_TX };
 }
 
 /**
@@ -339,8 +343,9 @@ export async function getTokenMetadata(mintAddress: string): Promise<{ name: str
   return fallback;
 }
 
-/** Find the funding source of a wallet (earliest incoming SOL transfer) */
-export async function findFundingSource(wallet: string): Promise<string | null> {
+/** Find the funding source of a wallet (earliest incoming SOL transfer).
+ *  Returns wallet address AND timestamp for burner detection. */
+export async function findFundingSource(wallet: string): Promise<{ wallet: string; timestamp: string } | null> {
   // Enhanced API sort-order=asc — 1 call to get oldest tx
   try {
     const txs = await getEnhancedTransactions(wallet, { limit: 5, sortOrder: 'asc' });
@@ -348,10 +353,18 @@ export async function findFundingSource(wallet: string): Promise<string | null> 
       const transfers = tx.nativeTransfers || [];
       for (const t of transfers) {
         if (t.toUserAccount === wallet && t.fromUserAccount && t.fromUserAccount !== wallet) {
-          return t.fromUserAccount;
+          const timestamp = tx.timestamp
+            ? new Date(tx.timestamp * 1000).toISOString()
+            : new Date().toISOString();
+          return { wallet: t.fromUserAccount, timestamp };
         }
       }
-      if (tx.feePayer && tx.feePayer !== wallet) return tx.feePayer;
+      if (tx.feePayer && tx.feePayer !== wallet) {
+        const timestamp = tx.timestamp
+          ? new Date(tx.timestamp * 1000).toISOString()
+          : new Date().toISOString();
+        return { wallet: tx.feePayer, timestamp };
+      }
     }
   } catch {
     // fallback to RPC
@@ -373,29 +386,38 @@ export async function findFundingSource(wallet: string): Promise<string | null> 
   const tx = await getParsedTransaction(oldestSig.signature);
   if (!tx) return null;
 
+  const timestamp = oldestSig.blockTime
+    ? new Date(oldestSig.blockTime * 1000).toISOString()
+    : new Date().toISOString();
+
   const instructions = tx.transaction?.message?.instructions || [];
   for (const ix of instructions) {
     if (ix.parsed?.type === 'transfer' && ix.parsed?.info?.destination === wallet) {
-      return ix.parsed.info.source;
+      return { wallet: ix.parsed.info.source, timestamp };
     }
   }
 
   const signers = (tx.transaction?.message?.accountKeys || [])
     .filter((k: any) => k.signer && k.pubkey !== wallet);
-  if (signers.length > 0) return signers[0].pubkey;
+  if (signers.length > 0) return { wallet: signers[0].pubkey, timestamp };
 
   return null;
 }
 
 /**
  * Analyze a funding wallet's cluster — find other wallets it funded
- * and check if they are also Pump.fun deployers.
- * Returns list of funded wallets and how many are deployers.
+ * and check if they are also deployers.
+ * Now checks 25 wallets (up from 10), any CREATE type (not just PUMP_FUN),
+ * and detects CEX funding sources.
  */
 export async function analyzeCluster(
   funderWallet: string,
   excludeWallet: string
-): Promise<{ fundedWallets: string[]; deployerCount: number }> {
+): Promise<{ fundedWallets: string[]; deployerCount: number; fromCex: boolean; cexName: string | null }> {
+  // CEX detection
+  const cexName = CEX_WALLETS[funderWallet] || null;
+  const fromCex = cexName !== null;
+
   const fundedWallets = new Set<string>();
 
   // Scan funder's outgoing SOL transfers via Enhanced API
@@ -412,7 +434,6 @@ export async function analyzeCluster(
       for (const tx of txs) {
         const nativeTransfers = tx.nativeTransfers || [];
         for (const t of nativeTransfers) {
-          // Outgoing SOL from funder to other wallets
           if (
             t.fromUserAccount === funderWallet &&
             t.toUserAccount &&
@@ -434,43 +455,40 @@ export async function analyzeCluster(
   }
 
   if (fundedWallets.size === 0) {
-    return { fundedWallets: [], deployerCount: 0 };
+    return { fundedWallets: [], deployerCount: 0, fromCex, cexName };
   }
 
-  // Check a sample of funded wallets for Pump.fun activity (max 10 to limit API calls)
-  const walletsToCheck = Array.from(fundedWallets).slice(0, 10);
+  // Check up to 25 funded wallets for deployer activity (up from 10)
+  const walletsToCheck = Array.from(fundedWallets).slice(0, 25);
   let deployerCount = 0;
 
-  const checkBatchSize = 3;
-  for (let i = 0; i < walletsToCheck.length; i += checkBatchSize) {
-    const batch = walletsToCheck.slice(i, i + checkBatchSize);
-    const results = await Promise.all(
-      batch.map(async (wallet) => {
-        try {
-          // Quick check: look for Pump.fun CREATE tx in first 20 txs
-          // Only count actual deployers (CREATE+PUMP_FUN), not buyers/sellers
-          const txs = await getEnhancedTransactions(wallet, { limit: 20 });
-          const isDeployer = txs.some(
-            (tx: any) =>
-              tx.feePayer === wallet &&
-              tx.source === 'PUMP_FUN' &&
-              (tx.type === 'CREATE' || tx.type === 'TOKEN_MINT')
-          );
-          return isDeployer;
-        } catch {
-          return false;
-        }
-      })
-    );
+  // Check all 25 in parallel (each is a single API call)
+  const results = await Promise.all(
+    walletsToCheck.map(async (wallet) => {
+      try {
+        const txs = await getEnhancedTransactions(wallet, { limit: 20 });
+        // Broadened: any CREATE or TOKEN_MINT type (not just PUMP_FUN source)
+        const isDeployer = txs.some(
+          (tx: any) =>
+            tx.feePayer === wallet &&
+            (tx.type === 'CREATE' || tx.type === 'TOKEN_MINT')
+        );
+        return isDeployer;
+      } catch {
+        return false;
+      }
+    })
+  );
 
-    for (const isDeployer of results) {
-      if (isDeployer) deployerCount++;
-    }
+  for (const isDeployer of results) {
+    if (isDeployer) deployerCount++;
   }
 
   return {
     fundedWallets: Array.from(fundedWallets),
     deployerCount,
+    fromCex,
+    cexName,
   };
 }
 
@@ -530,7 +548,6 @@ export async function checkDeployerHoldings(
   const supply = BigInt(totalSupply);
   if (supply === BigInt(0)) return 0;
 
-  // Calculate percentage: (balance * 10000 / supply) / 100 for 2 decimal places
   const pct = Number((deployerBalance * BigInt(10000)) / supply) / 100;
   return Math.round(pct * 100) / 100;
 }
@@ -569,7 +586,7 @@ export async function checkTopHolders(
 }
 
 /**
- * Detect bundled launches — 3+ unique wallets buying in the creation slot (±1).
+ * Detect bundled launches — 3+ unique wallets buying in the creation slot (±3).
  * Returns true if bundled, false if not, null if detection couldn't run.
  */
 export async function checkBundledLaunch(
@@ -594,13 +611,12 @@ export async function checkBundledLaunch(
     // Find the deployer (feePayer of creation tx)
     const deployer = creationTx.feePayer;
 
-    // Count unique non-deployer wallets that bought within ±3 slots (~1.2 seconds)
+    // Count unique non-deployer wallets that bought within ±3 slots
     const earlyBuyers = new Set<string>();
     for (const tx of txs) {
       if (!tx.slot || Math.abs(tx.slot - creationSlot) > 3) continue;
       if (tx.signature === creationSig) continue;
 
-      // Check token transfers for buy activity
       const transfers = tx.tokenTransfers || [];
       for (const t of transfers) {
         if (t.mint === mintAddress && t.toUserAccount && t.toUserAccount !== deployer) {
@@ -608,7 +624,6 @@ export async function checkBundledLaunch(
         }
       }
 
-      // Also check feePayer if different from deployer
       if (tx.feePayer && tx.feePayer !== deployer) {
         const hasBuy = transfers.some(
           (t: any) => t.mint === mintAddress && t.toUserAccount === tx.feePayer
@@ -618,6 +633,19 @@ export async function checkBundledLaunch(
     }
 
     return earlyBuyers.size >= 3;
+  } catch {
+    return null;
+  }
+}
+
+/** Get SOL balance for a wallet (in SOL, not lamports) */
+export async function getWalletSolBalance(wallet: string): Promise<number | null> {
+  try {
+    const result = await rpcCall('getBalance', [wallet]);
+    if (result?.value !== undefined) {
+      return result.value / 1e9;
+    }
+    return null;
   } catch {
     return null;
   }
