@@ -18,7 +18,7 @@ import { createX402Middleware, getX402Stats, type X402ServerConfig } from './ser
 // Import db to trigger SQLite init + admin seeding on startup
 import './services/db';
 
-const app = express();
+export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Bot API key middleware — bypasses JWT auth + rate limits for trusted bots
@@ -47,7 +47,7 @@ app.use(cors({
   origin: [
     'https://daybreakscan.com',
     'https://www.daybreakscan.com',
-    /\.vercel\.app$/,
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/,
     'http://localhost:3000',
     'http://localhost:5173',
   ],
@@ -107,10 +107,13 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Daybreak API running on port ${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/api/v1/health`);
-  console.log(`Bot endpoints: /api/v1/bot/deployer/:token, /api/v1/bot/wallet/:wallet`);
-  console.log(`x402 paid endpoints: /api/v1/paid/deployer/:token, /api/v1/paid/wallet/:wallet`);
-  console.log(`x402 stats: http://localhost:${PORT}/api/v1/x402/stats`);
-});
+// Only start listening when run directly (not imported for testing)
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Daybreak API running on port ${PORT}`);
+    console.log(`Health: http://localhost:${PORT}/api/v1/health`);
+    console.log(`Bot endpoints: /api/v1/bot/deployer/:token, /api/v1/bot/wallet/:wallet`);
+    console.log(`x402 paid endpoints: /api/v1/paid/deployer/:token, /api/v1/paid/wallet/:wallet`);
+    console.log(`x402 stats: http://localhost:${PORT}/api/v1/x402/stats`);
+  });
+}

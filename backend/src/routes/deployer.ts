@@ -80,14 +80,19 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     const unverifiedMints = deployerTokenMints.filter(mint => !tokenStatuses.has(mint));
     unknownCount = unverifiedMints.length;
 
-    const metadataPromises = verifiedMints.map(async (mint) => {
-      if (mint === token_address) return { mint, ...tokenMeta };
-      const status = tokenStatuses.get(mint);
-      if (status?.name && status.name !== 'Unknown') return { mint, name: status.name, symbol: status.symbol || '???' };
-      const onChain = await getTokenMetadata(mint);
-      return { mint, ...onChain };
-    });
-    const allMetadata = await Promise.all(metadataPromises);
+    // Fetch metadata in batches of 5 to avoid flooding RPC
+    const allMetadata: Array<{ mint: string; name: string; symbol: string }> = [];
+    for (let i = 0; i < verifiedMints.length; i += 5) {
+      const batch = verifiedMints.slice(i, i + 5);
+      const batchResults = await Promise.all(batch.map(async (mint) => {
+        if (mint === token_address) return { mint, ...tokenMeta };
+        const status = tokenStatuses.get(mint);
+        if (status?.name && status.name !== 'Unknown') return { mint, name: status.name, symbol: status.symbol || '???' };
+        const onChain = await getTokenMetadata(mint);
+        return { mint, ...onChain };
+      }));
+      allMetadata.push(...batchResults);
+    }
     const metaMap = new Map(allMetadata.map(m => [m.mint, { name: m.name, symbol: m.symbol }]));
 
     for (const mint of verifiedMints) {
@@ -257,12 +262,13 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
     scanCache.set(token_address, result);
     res.json(result);
-  } catch (err: any) {
-    console.error('Scan error:', err.message);
-    if (err.message?.includes('Helius API')) {
-      res.status(503).json({ error: 'Upstream API temporarily unavailable. Please try again later.' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Scan error:', message);
+    if (message.includes('Helius API')) {
+      res.status(503).json({ error: 'Upstream API temporarily unavailable. Please try again later.', code: 'UPSTREAM_ERROR' });
     } else {
-      res.status(500).json({ error: 'Scan failed. Please try again later.' });
+      res.status(500).json({ error: 'Scan failed. Please try again later.', code: 'SCAN_ERROR' });
     }
   }
 });

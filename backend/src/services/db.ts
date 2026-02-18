@@ -26,11 +26,14 @@ db.exec(`
   )
 `);
 
-// Seed admin wallets
-const ADMIN_WALLETS = [
+// Seed admin wallets from env (comma-separated) with hardcoded fallback
+const DEFAULT_ADMIN_WALLETS = [
   '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2',
   'DW2DQdED8ABpG98YCxf2UBgeJiw3ZaELJND1UsNEXkWq',
 ];
+const ADMIN_WALLETS = process.env.ADMIN_WALLETS
+  ? process.env.ADMIN_WALLETS.split(',').map(w => w.trim()).filter(Boolean)
+  : DEFAULT_ADMIN_WALLETS;
 
 const upsertAdmin = db.prepare(`
   INSERT INTO wallet_usage (wallet, scans_today, last_reset, total_scans, is_admin)

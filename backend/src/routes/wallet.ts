@@ -52,14 +52,18 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     const verifiedMints = deployerTokenMints.filter(mint => tokenStatuses.has(mint));
     const unknownCount = deployerTokenMints.length - verifiedMints.length;
 
-    // Fetch metadata for verified tokens
-    const metadataPromises = verifiedMints.map(async (mint) => {
-      const status = tokenStatuses.get(mint);
-      if (status?.name && status.name !== 'Unknown') return { mint, name: status.name, symbol: status.symbol || '???' };
-      const onChain = await getTokenMetadata(mint);
-      return { mint, ...onChain };
-    });
-    const allMetadata = await Promise.all(metadataPromises);
+    // Fetch metadata in batches of 5 to avoid flooding RPC
+    const allMetadata: Array<{ mint: string; name: string; symbol: string }> = [];
+    for (let i = 0; i < verifiedMints.length; i += 5) {
+      const batch = verifiedMints.slice(i, i + 5);
+      const batchResults = await Promise.all(batch.map(async (mint) => {
+        const status = tokenStatuses.get(mint);
+        if (status?.name && status.name !== 'Unknown') return { mint, name: status.name, symbol: status.symbol || '???' };
+        const onChain = await getTokenMetadata(mint);
+        return { mint, ...onChain };
+      }));
+      allMetadata.push(...batchResults);
+    }
     const metaMap = new Map(allMetadata.map(m => [m.mint, { name: m.name, symbol: m.symbol }]));
 
     for (const mint of verifiedMints) {
@@ -184,9 +188,14 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
     walletCache.set(wallet_address, result);
     res.json(result);
-  } catch (err: any) {
-    console.error('Wallet scan error:', err.message);
-    res.status(500).json({ error: 'Wallet scan failed. Please try again later.' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Wallet scan error:', message);
+    if (message.includes('Helius API')) {
+      res.status(503).json({ error: 'Upstream API temporarily unavailable. Please try again later.', code: 'UPSTREAM_ERROR' });
+    } else {
+      res.status(500).json({ error: 'Wallet scan failed. Please try again later.', code: 'SCAN_ERROR' });
+    }
   }
 });
 
