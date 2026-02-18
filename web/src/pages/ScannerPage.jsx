@@ -22,6 +22,10 @@ import {
   ExternalLink,
   Clock,
   CreditCard,
+  ChevronDown,
+  ChevronUp,
+  Activity,
+  Zap,
 } from 'lucide-react';
 
 // ---------- Branding ----------
@@ -109,6 +113,66 @@ function UsageBadge({ usage }) {
           <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- Score Breakdown ----------
+
+function ScoreBreakdownCard({ breakdown }) {
+  const [open, setOpen] = useState(false);
+  if (!breakdown) return null;
+
+  const components = [
+    { label: 'Rug Rate', earned: breakdown.rug_rate_component, max: 40 },
+    { label: 'Token Count', earned: breakdown.token_count_component, max: 20 },
+    { label: 'Lifespan', earned: breakdown.lifespan_component, max: 20 },
+    { label: 'Cluster', earned: breakdown.cluster_component, max: 20 },
+  ];
+
+  return (
+    <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-700/20 transition-colors"
+      >
+        <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+          <Activity size={14} />
+          Score Breakdown
+        </h3>
+        {open ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          {components.map((c) => (
+            <div key={c.label}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-400">{c.label}</span>
+                <span className="text-slate-300 font-mono">{c.earned.toFixed(1)} / {c.max}</span>
+              </div>
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                  style={{ width: `${(c.earned / c.max) * 100}%` }}
+                />
+              </div>
+            </div>
+          ))}
+          {breakdown.risk_deductions < 0 && (
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-700">
+              <span className="text-red-400">Risk Deductions</span>
+              <span className="text-red-400 font-mono font-semibold">{breakdown.risk_deductions}</span>
+            </div>
+          )}
+          <div className="pt-2 border-t border-slate-700 space-y-1">
+            {breakdown.details?.map((d, i) => (
+              <p key={i} className={`text-xs ${d.includes('-') && d.includes('points') && !d.includes('/') ? 'text-red-400' : 'text-slate-500'}`}>
+                {d}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -610,6 +674,105 @@ export default function ScannerPage() {
                   </div>
                 )}
               </div>
+
+              {/* Token Risk Analysis */}
+              {result.token_risks && (
+                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Zap size={14} />
+                    Token Risk Analysis
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${result.token_risks.mint_authority === null ? 'bg-green-400' : 'bg-red-400'}`} />
+                      <div>
+                        <div className="text-xs text-slate-500">Mint Authority</div>
+                        <div className={`text-sm font-medium ${result.token_risks.mint_authority === null ? 'text-green-400' : 'text-red-400'}`}>
+                          {result.token_risks.mint_authority === null ? 'Revoked' : 'ACTIVE'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${result.token_risks.freeze_authority === null ? 'bg-green-400' : 'bg-red-400'}`} />
+                      <div>
+                        <div className="text-xs text-slate-500">Freeze Authority</div>
+                        <div className={`text-sm font-medium ${result.token_risks.freeze_authority === null ? 'text-green-400' : 'text-red-400'}`}>
+                          {result.token_risks.freeze_authority === null ? 'Revoked' : 'ACTIVE'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        result.token_risks.deployer_holdings_pct === null ? 'bg-slate-500'
+                          : result.token_risks.deployer_holdings_pct > 30 ? 'bg-red-400'
+                          : result.token_risks.deployer_holdings_pct > 10 ? 'bg-yellow-400'
+                          : 'bg-green-400'
+                      }`} />
+                      <div>
+                        <div className="text-xs text-slate-500">Deployer Holdings</div>
+                        <div className={`text-sm font-medium ${
+                          result.token_risks.deployer_holdings_pct === null ? 'text-slate-400'
+                            : result.token_risks.deployer_holdings_pct > 30 ? 'text-red-400'
+                            : result.token_risks.deployer_holdings_pct > 10 ? 'text-yellow-400'
+                            : 'text-green-400'
+                        }`}>
+                          {result.token_risks.deployer_holdings_pct !== null
+                            ? `${result.token_risks.deployer_holdings_pct.toFixed(1)}%`
+                            : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        result.token_risks.top_holder_pct === null ? 'bg-slate-500'
+                          : result.token_risks.top_holder_pct > 80 ? 'bg-red-400'
+                          : result.token_risks.top_holder_pct > 40 ? 'bg-yellow-400'
+                          : 'bg-green-400'
+                      }`} />
+                      <div>
+                        <div className="text-xs text-slate-500">Top Holder</div>
+                        <div className={`text-sm font-medium ${
+                          result.token_risks.top_holder_pct === null ? 'text-slate-400'
+                            : result.token_risks.top_holder_pct > 80 ? 'text-red-400'
+                            : result.token_risks.top_holder_pct > 40 ? 'text-yellow-400'
+                            : 'text-green-400'
+                        }`}>
+                          {result.token_risks.top_holder_pct !== null
+                            ? `${result.token_risks.top_holder_pct.toFixed(1)}%`
+                            : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        result.token_risks.bundle_detected === null ? 'bg-slate-500'
+                          : result.token_risks.bundle_detected ? 'bg-red-400'
+                          : 'bg-green-400'
+                      }`} />
+                      <div>
+                        <div className="text-xs text-slate-500">Bundled Launch</div>
+                        <div className={`text-sm font-medium ${
+                          result.token_risks.bundle_detected === null ? 'text-slate-400'
+                            : result.token_risks.bundle_detected ? 'text-red-400'
+                            : 'text-green-400'
+                        }`}>
+                          {result.token_risks.bundle_detected === null
+                            ? 'N/A'
+                            : result.token_risks.bundle_detected ? 'DETECTED' : 'Not detected'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {result.token_risks === null && result.confidence?.token_risks_checked === false && (
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                  <p className="text-xs text-slate-500 text-center">Risk checks unavailable for this token</p>
+                </div>
+              )}
+
+              {/* Score Breakdown */}
+              <ScoreBreakdownCard breakdown={result.score_breakdown} />
 
               {/* Token list */}
               {result.deployer.tokens && result.deployer.tokens.length > 0 && (

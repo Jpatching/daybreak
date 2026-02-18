@@ -16,7 +16,7 @@ import {
 import { bulkCheckTokens } from '../services/dexscreener';
 import { calculateReputation, type RiskPenalties } from '../services/reputation';
 import { TTLCache } from '../services/cache';
-import type { DeployerScan, DeployerToken, FundingInfo, TokenRisks, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
+import type { DeployerScan, DeployerToken, FundingInfo, TokenRisks, ScoreBreakdown, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
 const scanCache = new TTLCache<DeployerScan>(1800); // 30 min TTL — saves Helius + DexScreener calls
@@ -123,9 +123,24 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
     const totalTokens = deployerTokenMints.length;
     const verifiedCount = verifiedMints.length;
-    // Rug rate based ONLY on verified tokens
-    const rugRate = verifiedCount > 0 ? deadCount / verifiedCount : 0;
+    // Count unverified tokens as dead (conservative — if DexScreener can't find them, they're abandoned)
+    const adjustedDead = deadCount + unknownCount;
+    const rugRate = totalTokens > 0 ? adjustedDead / totalTokens : 0;
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
+
+    // Deploy velocity: tokens per day
+    let deployVelocity: number | null = null;
+    const creationDates = tokens
+      .map(t => t.created_at)
+      .filter((d): d is string => d !== null)
+      .sort();
+    if (creationDates.length >= 2) {
+      const daySpan = (new Date(creationDates[creationDates.length - 1]).getTime() - new Date(creationDates[0]).getTime()) / 86400000;
+      deployVelocity = Math.round((totalTokens / Math.max(1, daySpan)) * 100) / 100;
+    } else if (totalTokens >= 2) {
+      // Multiple tokens but only 0-1 have dates — high velocity signal
+      deployVelocity = totalTokens;
+    }
 
     // Step 6: Funding trace (1 hop)
     const fundingSource = await findFundingSource(deployerWallet);
@@ -133,7 +148,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       source_wallet: fundingSource,
       other_deployers_funded: 0,
       cluster_total_tokens: totalTokens,
-      cluster_total_dead: deadCount,
+      cluster_total_dead: adjustedDead,
     };
 
     // Step 7: Cluster analysis
@@ -174,8 +189,10 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         riskPenalties = {
           mintAuthorityActive: mintInfo.mintAuthority !== null,
           freezeAuthorityActive: mintInfo.freezeAuthority !== null,
-          topHolderAbove80: (topHolders?.topHolderPct ?? 0) > 80,
+          topHolderPct: topHolders?.topHolderPct ?? null,
           bundleDetected: bundled === true,
+          deployerHoldingsPct: deployerHoldings,
+          deployVelocity,
         };
 
         tokenRisksChecked = true;
@@ -185,7 +202,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     }
 
     // Step 8: Calculate reputation score
-    const { score, verdict } = calculateReputation({
+    const { score, verdict, breakdown } = calculateReputation({
       rugRate,
       tokenCount: totalTokens,
       avgLifespanDays: avgLifespan,
@@ -245,14 +262,17 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         tokens_created: totalTokens,
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
+        tokens_assumed_dead: unknownCount,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         reputation_score: score,
+        deploy_velocity: deployVelocity,
         first_seen: firstSeen,
         last_seen: lastSeen,
         tokens,
       },
       funding,
       verdict,
+      score_breakdown: breakdown,
       token_risks: tokenRisks,
       evidence,
       confidence,

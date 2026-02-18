@@ -144,8 +144,10 @@ function testScoringUnit() {
       riskPenalties: {
         mintAuthorityActive: true,    // -10
         freezeAuthorityActive: true,  // -5
-        topHolderAbove80: true,       // -5
+        topHolderPct: 90,             // -5 (>80%)
         bundleDetected: true,         // -5
+        deployerHoldingsPct: null,
+        deployVelocity: null,
       },
     });
     const expectedDiff = 25;

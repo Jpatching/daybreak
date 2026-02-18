@@ -580,7 +580,7 @@ export async function checkBundledLaunch(
 
   try {
     const txs = await getEnhancedTransactions(mintAddress, {
-      limit: 10,
+      limit: 20,
       sortOrder: 'asc',
     });
 
@@ -594,10 +594,10 @@ export async function checkBundledLaunch(
     // Find the deployer (feePayer of creation tx)
     const deployer = creationTx.feePayer;
 
-    // Count unique non-deployer wallets that bought within ±1 slot
+    // Count unique non-deployer wallets that bought within ±3 slots (~1.2 seconds)
     const earlyBuyers = new Set<string>();
     for (const tx of txs) {
-      if (!tx.slot || Math.abs(tx.slot - creationSlot) > 1) continue;
+      if (!tx.slot || Math.abs(tx.slot - creationSlot) > 3) continue;
       if (tx.signature === creationSig) continue;
 
       // Check token transfers for buy activity

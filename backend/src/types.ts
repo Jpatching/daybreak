@@ -19,8 +19,10 @@ export interface DeployerInfo {
   tokens_created: number;
   tokens_dead: number;
   tokens_unverified: number;
+  tokens_assumed_dead: number;
   rug_rate: number;
   reputation_score: number;
+  deploy_velocity: number | null;
   first_seen: string | null;
   last_seen: string | null;
   tokens: DeployerToken[];
@@ -63,11 +65,21 @@ export interface ScanUsage {
   scans_remaining: number;
 }
 
+export interface ScoreBreakdown {
+  rug_rate_component: number;
+  token_count_component: number;
+  lifespan_component: number;
+  cluster_component: number;
+  risk_deductions: number;
+  details: string[];
+}
+
 export interface DeployerScan {
   token: TokenInfo;
   deployer: DeployerInfo;
   funding: FundingInfo;
   verdict: Verdict;
+  score_breakdown: ScoreBreakdown;
   token_risks: TokenRisks | null;
   evidence: ScanEvidence;
   confidence: ScanConfidence;

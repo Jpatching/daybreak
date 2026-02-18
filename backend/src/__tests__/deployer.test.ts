@@ -84,6 +84,11 @@ describe('Deployer scan endpoint', () => {
     expect(res.body.deployer.reputation_score).toBeGreaterThanOrEqual(0);
     expect(res.body.deployer.reputation_score).toBeLessThanOrEqual(100);
     expect(res.body).toHaveProperty('verdict');
+    expect(res.body).toHaveProperty('score_breakdown');
+    expect(res.body.score_breakdown).toHaveProperty('rug_rate_component');
+    expect(res.body.score_breakdown).toHaveProperty('details');
+    expect(Array.isArray(res.body.score_breakdown.details)).toBe(true);
+    expect(res.body.deployer).toHaveProperty('tokens_assumed_dead');
     expect(res.body).toHaveProperty('evidence');
     expect(res.body).toHaveProperty('confidence');
     expect(res.body).toHaveProperty('scanned_at');

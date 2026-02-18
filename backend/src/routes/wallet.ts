@@ -94,8 +94,9 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
     const totalTokens = deployerTokenMints.length;
     const verifiedCount = verifiedMints.length;
-    // Rug rate based ONLY on verified tokens
-    const rugRate = verifiedCount > 0 ? deadCount / verifiedCount : 0;
+    // Count unverified tokens as dead (conservative)
+    const adjustedDead = deadCount + unknownCount;
+    const rugRate = totalTokens > 0 ? adjustedDead / totalTokens : 0;
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
     // Funding trace + cluster analysis
@@ -104,7 +105,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       source_wallet: fundingSource,
       other_deployers_funded: 0,
       cluster_total_tokens: totalTokens,
-      cluster_total_dead: deadCount,
+      cluster_total_dead: adjustedDead,
     };
 
     let clusterChecked = false;
@@ -120,7 +121,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       }
     }
 
-    const { score, verdict } = calculateReputation({
+    const { score, verdict, breakdown } = calculateReputation({
       rugRate,
       tokenCount: totalTokens,
       avgLifespanDays: avgLifespan,
@@ -171,14 +172,17 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         tokens_created: totalTokens,
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
+        tokens_assumed_dead: unknownCount,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         reputation_score: score,
+        deploy_velocity: null,
         first_seen: firstSeen,
         last_seen: lastSeen,
         tokens,
       },
       funding,
       verdict,
+      score_breakdown: breakdown,
       token_risks: null,
       evidence,
       confidence,
