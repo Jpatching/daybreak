@@ -82,7 +82,7 @@ db.exec(`
   )
 `);
 
-// Scan log table (powers social proof stats)
+// Scan log table (powers social proof stats + per-wallet history)
 db.exec(`
   CREATE TABLE IF NOT EXISTS scan_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,9 +90,17 @@ db.exec(`
     verdict TEXT,
     score INTEGER,
     scanned_at TEXT NOT NULL DEFAULT (datetime('now')),
-    source TEXT NOT NULL DEFAULT 'auth'
+    source TEXT NOT NULL DEFAULT 'auth',
+    wallet TEXT
   )
 `);
+
+// Migration: add wallet column if missing
+try {
+  db.exec(`ALTER TABLE scan_log ADD COLUMN wallet TEXT`);
+} catch {
+  // column already exists
+}
 
 // Guest usage prepared statements
 const getGuestUsageStmt = db.prepare(`
@@ -119,7 +127,7 @@ const incrementGuestTransaction = db.transaction((ip: string) => {
 
 // Scan log prepared statements
 const insertScanLogStmt = db.prepare(`
-  INSERT INTO scan_log (token_address, verdict, score, source) VALUES (?, ?, ?, ?)
+  INSERT INTO scan_log (token_address, verdict, score, source, wallet) VALUES (?, ?, ?, ?, ?)
 `);
 
 const getStatsStmt = db.prepare(`
@@ -159,8 +167,24 @@ export function incrementGuestUsage(ip: string): void {
   incrementGuestTransaction(ip);
 }
 
-export function logScan(tokenAddress: string, verdict: string | null, score: number | null, source: string = 'auth'): void {
-  insertScanLogStmt.run(tokenAddress, verdict, score, source);
+export function logScan(tokenAddress: string, verdict: string | null, score: number | null, source: string = 'auth', wallet: string | null = null): void {
+  insertScanLogStmt.run(tokenAddress, verdict, score, source, wallet);
+}
+
+// Wallet scan history
+const getWalletHistoryStmt = db.prepare(`
+  SELECT s.token_address, s.verdict, s.score, s.scanned_at,
+         d.token_name, d.token_symbol
+  FROM scan_log s
+  LEFT JOIN deployer_cache d ON s.token_address = d.token_address
+  WHERE s.wallet = ?
+  GROUP BY s.token_address
+  ORDER BY MAX(s.id) DESC
+  LIMIT ?
+`);
+
+export function getWalletHistory(wallet: string, limit: number = 10): RecentScan[] {
+  return getWalletHistoryStmt.all(wallet, limit) as RecentScan[];
 }
 
 export interface ScanStats {

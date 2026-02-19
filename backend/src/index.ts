@@ -19,7 +19,7 @@ import { closeBrowser } from './services/reportcard';
 import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigrations, getPumpPortalStatus } from './services/pumpportal';
 
 // Import db to trigger SQLite init + admin seeding on startup
-import { getStats, getRecentScans } from './services/db';
+import { getStats, getRecentScans, getWalletHistory } from './services/db';
 
 export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -85,6 +85,23 @@ app.get('/api/v1/stats', (_req, res) => {
 app.get('/api/v1/recent', (_req, res) => {
   const recent = getRecentScans(5);
   res.json(recent);
+});
+
+// Wallet scan history (requires auth, no rate limit count)
+app.get('/api/v1/auth/history', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Auth required' });
+  }
+  try {
+    const { verifyToken } = await import('./services/auth');
+    const wallet = verifyToken(authHeader.slice(7));
+    if (!wallet) return res.status(401).json({ error: 'Invalid token' });
+    const history = getWalletHistory(wallet, 10);
+    res.json(history);
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
 });
 
 // Free tier: wallet auth + rate limit (frontend users)

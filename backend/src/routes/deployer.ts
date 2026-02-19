@@ -449,7 +449,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       : req.headers['x-bot-key'] ? 'bot'
       : req.headers['x-payment'] ? 'x402'
       : 'auth';
-    logScan(token_address, verdict, score, scanSource);
+    logScan(token_address, verdict, score, scanSource, req.wallet || null);
 
     res.json(result);
   } catch (err: unknown) {

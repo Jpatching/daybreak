@@ -94,3 +94,7 @@ export async function checkHealth() {
 export async function fetchUsage(token) {
   return apiFetch(`${API_BASE}/auth/usage`, token);
 }
+
+export async function fetchScanHistory(token) {
+  return apiFetch(`${API_BASE}/auth/history`, token);
+}

@@ -214,7 +214,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       : req.headers['x-bot-key'] ? 'bot'
       : req.headers['x-payment'] ? 'x402'
       : 'auth';
-    logScan(wallet_address, verdict, score, scanSource);
+    logScan(wallet_address, verdict, score, scanSource, req.wallet || null);
 
     res.json(result);
   } catch (err: unknown) {
