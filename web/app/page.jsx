@@ -1,21 +1,21 @@
 import LandingContent from '@/components/LandingContent';
 
 export const metadata = {
-  title: 'Daybreak - Solana Deployer Reputation Scanner',
+  title: 'DaybreakScan — Solana Deployer Reputation Scanner | Check Rug Pull History',
   description:
-    'Check any Solana token deployer\'s reputation before you ape. Rug detection, deployer history, cluster analysis, and funding trace on Solana.',
+    "Check any Solana token deployer's rug history before you trade. Scan wallet reputation, death rates, funding clusters, and risk scores instantly. Free Pump.fun safety checks.",
   alternates: { canonical: '/' },
   openGraph: {
-    title: 'Daybreak - Solana Deployer Reputation Scanner',
+    title: 'DaybreakScan — Solana Deployer Reputation Scanner | Check Rug Pull History',
     description:
-      'Check any deployer\'s reputation. Rug detection and scoring on Solana.',
+      "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
     url: '/',
     images: ['/daybreak-logo.png'],
   },
   twitter: {
-    title: 'Daybreak - Solana Deployer Reputation Scanner',
+    title: 'DaybreakScan — Solana Deployer Reputation Scanner',
     description:
-      'Check any deployer\'s reputation. Rug detection and scoring on Solana.',
+      "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
     images: ['/daybreak-logo.png'],
   },
 };
@@ -29,9 +29,9 @@ export default function HomePage() {
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'WebApplication',
-            name: 'Daybreak',
+            name: 'DaybreakScan',
             description:
-              'Solana deployer reputation scanner — check any token deployer\'s rug history before you ape.',
+              "Solana deployer reputation scanner — check any token deployer's rug history, death rate, funding clusters, and risk score before you trade.",
             url: 'https://www.daybreakscan.com',
             applicationCategory: 'FinanceApplication',
             offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

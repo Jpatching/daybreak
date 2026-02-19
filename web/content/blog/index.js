@@ -1,36 +1,36 @@
 export const posts = [
   {
     slug: 'how-to-spot-solana-rug-pulls',
-    title: 'How to Spot Rug Pulls on Solana Before You Trade',
+    title: 'How to Spot Solana Rug Pulls: Check the Deployer, Not Just the Token',
     description:
-      'Learn the 7 on-chain red flags that signal a rug pull — from deployer death rates to cluster networks — and how to check any token in 60 seconds.',
+      "Most rug pull checkers miss the real signal — the deployer's history. Learn how to check a Solana wallet's full rug rate and risk score in seconds with DaybreakScan.",
     date: '2026-02-20',
     tags: ['rug-pull', 'solana', 'safety', 'guide'],
     readTime: '10 min',
   },
   {
     slug: 'what-is-deployer-reputation',
-    title: 'What Is Deployer Reputation and Why It Matters',
+    title: 'Deployer Reputation Explained: Why Token Checks Miss Serial Ruggers',
     description:
-      'Why checking the token isn\'t enough. How deployer history, death rates, and funding cluster analysis reveal serial ruggers that contract checks miss.',
+      "Check any Solana deployer's rug rate, funding cluster, and risk score. See why deployer history catches serial ruggers that token-level scanners miss.",
     date: '2026-02-21',
     tags: ['reputation', 'deployer', 'methodology'],
     readTime: '9 min',
   },
   {
     slug: 'pump-fun-token-safety-guide',
-    title: "Pump.fun Token Safety: A Trader's Guide",
+    title: "Pump.fun Token Safety Guide: How to Spot Rug Pulls Before They Happen",
     description:
-      '98.6% of Pump.fun tokens are scams. Here\'s a 5-step safety check to filter the 1.4% worth trading — from deployer reputation to bundle detection.',
+      "Check any Pump.fun token deployer's full rug history before you buy. DaybreakScan scans wallet reputation, funding clusters, and risk scores instantly.",
     date: '2026-02-22',
     tags: ['pump-fun', 'safety', 'trading', 'guide'],
     readTime: '9 min',
   },
   {
     slug: 'why-contract-audits-arent-enough',
-    title: "Why Contract Audits Aren't Enough — The Case for Deployer History",
+    title: "Why Contract Audits Miss Solana Rug Pulls — Check the Deployer Instead",
     description:
-      'Contract audits verify code, not behavior. On Pump.fun, every token uses the same code — the deployer\'s track record is what separates scams from legitimate projects.',
+      "Contract audits verify code, not behavior. On Pump.fun every token uses the same code. Scan the deployer's rug history to spot scams before you trade.",
     date: '2026-02-23',
     tags: ['audits', 'deployer', 'security', 'analysis'],
     readTime: '8 min',

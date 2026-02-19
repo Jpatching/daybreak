@@ -18,24 +18,24 @@ const jetbrains = JetBrains_Mono({
 export const metadata = {
   metadataBase: new URL('https://www.daybreakscan.com'),
   title: {
-    default: 'Daybreak - Solana Deployer Reputation Scanner',
+    default: 'DaybreakScan — Solana Deployer Reputation Scanner | Check Rug Pull History',
     template: '%s | DaybreakScan',
   },
   description:
-    'Check any Solana token deployer\'s reputation before you ape. Rug detection, deployer history, cluster analysis.',
+    "Check any Solana token deployer's rug history before you trade. Scan wallet reputation, death rates, funding clusters, and risk scores instantly.",
   openGraph: {
     type: 'website',
     siteName: 'DaybreakScan',
-    title: 'Daybreak - Solana Deployer Reputation Scanner',
+    title: 'DaybreakScan — Solana Deployer Reputation Scanner',
     description:
-      'Check any deployer\'s reputation. Rug detection and scoring on Solana.',
+      "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
     images: ['/daybreak-logo.png'],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Daybreak - Solana Deployer Reputation Scanner',
+    title: 'DaybreakScan — Solana Deployer Reputation Scanner',
     description:
-      'Check any deployer\'s reputation. Rug detection and scoring on Solana.',
+      "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
     images: ['/daybreak-logo.png'],
   },
   robots: { index: true, follow: true },
