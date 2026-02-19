@@ -98,6 +98,8 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         fdv: status.fdv ?? null,
         created_at: status.pairCreatedAt || null,
         dexscreener_url: `https://dexscreener.com/solana/${mint}`,
+        death_type: null,
+        death_evidence: null,
       });
     }
 
@@ -119,6 +121,9 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       cluster_total_dead: adjustedDead,
       from_cex: false,
       cex_name: null,
+      network_wallets: 0,
+      network_tokens_affected: 0,
+      network_risk: null,
     };
 
     let clusterChecked = false;
@@ -134,7 +139,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       } catch { /* best-effort */ }
     }
 
-    const { score, verdict, breakdown } = calculateReputation({
+    const { score, verdict, verdict_reason, breakdown } = calculateReputation({
       deathRate,
       rugRate,
       tokenCount: totalTokens,
@@ -198,6 +203,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       },
       funding,
       verdict,
+      verdict_reason,
       score_breakdown: breakdown,
       token_risks: null,
       market_data: null,

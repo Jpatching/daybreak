@@ -221,20 +221,19 @@ export default function ProfileClient() {
                       </button>
                     </div>
 
-                    {remaining === 0 && (
-                      <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                        <p className="text-sm text-amber-400 font-medium mb-1">Need more scans?</p>
-                        <p className="text-xs text-slate-400 mb-3">
-                          Pay $0.01 USDC per scan via x402 protocol. No subscription required.
-                        </p>
-                        <a
-                          href="/scan"
-                          className="inline-flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-medium"
-                        >
-                          Go to Scanner <ArrowRight size={12} />
-                        </a>
-                      </div>
-                    )}
+                    <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                      <p className="text-sm text-amber-400 font-medium mb-1">Paid Scans</p>
+                      <p className="text-xs text-slate-400 mb-3">
+                        Pay $0.01 USDC per scan. No subscription, no commitment.
+                      </p>
+                      <a
+                        href="/scan"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg text-sm transition-colors"
+                      >
+                        Scan a Token <ArrowRight size={14} />
+                      </a>
+                      <p className="text-[10px] text-slate-600 mt-2">Powered by x402 protocol on Solana</p>
+                    </div>
                   </div>
                 )}
               </div>

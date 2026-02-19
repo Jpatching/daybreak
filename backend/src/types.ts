@@ -16,6 +16,8 @@ export interface DeployerToken {
   fdv: number | null;
   created_at: string | null;
   dexscreener_url: string;
+  death_type: DeathType | null;
+  death_evidence: DeathEvidence | null;
 }
 
 export interface DeployerInfo {
@@ -42,6 +44,9 @@ export interface FundingInfo {
   cluster_total_dead: number;
   from_cex: boolean;
   cex_name: string | null;
+  network_wallets: number;
+  network_tokens_affected: number;
+  network_risk: 'low' | 'medium' | 'high' | null;
 }
 
 export type Verdict = 'CLEAN' | 'SUSPICIOUS' | 'SERIAL_RUGGER';
@@ -116,11 +121,25 @@ export interface ScoreBreakdown {
   details: string[];
 }
 
+export type DeathType = 'natural' | 'likely_rug' | 'distributed_rug' | 'unverified';
+
+export interface DeathEvidence {
+  deployer_sold: boolean;
+  deployer_holdings_pct: number | null;
+  peak_liquidity: number | null;
+  lifespan_hours: number | null;
+  had_real_buyers: boolean;
+  initial_transfer_to: string | null;
+  initial_transfer_is_dex: boolean;
+  initial_transfer_is_associated: boolean;
+}
+
 export interface DeployerScan {
   token: TokenInfo;
   deployer: DeployerInfo;
   funding: FundingInfo;
   verdict: Verdict;
+  verdict_reason: string;
   score_breakdown: ScoreBreakdown;
   token_risks: TokenRisks | null;
   market_data: TokenMarketData | null;

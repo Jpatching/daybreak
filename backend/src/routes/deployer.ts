@@ -17,6 +17,7 @@ import {
 import { bulkCheckTokens, checkTokenStatus } from '../services/dexscreener';
 import { getTokenPrice } from '../services/jupiter';
 import { getTokenReport } from '../services/rugcheck';
+import { classifyDeaths } from '../services/death-classifier';
 import { calculateReputation, type RiskPenalties } from '../services/reputation';
 import { TTLCache } from '../services/cache';
 import {
@@ -25,6 +26,8 @@ import {
   upsertDeployerTokens,
   getStaleAliveTokens,
   saveReportCard,
+  upsertWalletAppearance,
+  getNetworkStats,
 } from '../services/db';
 import { renderTwitterCard } from '../services/reportcard';
 import fs from 'fs';
@@ -224,6 +227,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         fdv: status.fdv ?? null,
         created_at: status.pairCreatedAt || null,
         dexscreener_url: `https://dexscreener.com/solana/${mint}`,
+        death_type: null,
+        death_evidence: null,
       });
     }
 
@@ -253,6 +258,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
           fdv: null,
           created_at: null,
           dexscreener_url: `https://dexscreener.com/solana/${mint}`,
+          death_type: 'unverified',
+          death_evidence: null,
         });
       }
     }
@@ -310,6 +317,9 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       cluster_total_dead: adjustedDead,
       from_cex: false,
       cex_name: null,
+      network_wallets: 0,
+      network_tokens_affected: 0,
+      network_risk: null,
     };
 
     // Step 7: Cluster analysis
@@ -367,8 +377,63 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       // best-effort
     }
 
+    // Step 7.6: Death classification (best-effort)
+    try {
+      const deadTokensForClassification = tokens
+        .filter(t => t.alive === false)
+        .map(t => ({ address: t.address, liquidity: t.liquidity, created_at: t.created_at }));
+
+      if (deadTokensForClassification.length > 0) {
+        const classifications = await classifyDeaths(
+          deployerWallet,
+          deadTokensForClassification,
+          fundingSourceWallet,
+        );
+
+        for (const t of tokens) {
+          const classification = classifications.get(t.address);
+          if (classification) {
+            t.death_type = classification.type;
+            t.death_evidence = classification.evidence;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[death-classifier] Classification failed:', err instanceof Error ? err.message : err);
+    }
+
+    // Compute confirmed rug counts from classification
+    const confirmedRugs = tokens.filter(t =>
+      t.death_type === 'likely_rug' || t.death_type === 'distributed_rug'
+    ).length;
+    const naturalDeaths = tokens.filter(t => t.death_type === 'natural').length;
+
+    // Step 7.7: Record wallet appearances for network detection (best-effort)
+    try {
+      for (const t of tokens) {
+        if (t.death_evidence?.initial_transfer_to && !t.death_evidence.initial_transfer_is_dex) {
+          upsertWalletAppearance(
+            t.death_evidence.initial_transfer_to,
+            t.address,
+            deployerWallet,
+            t.death_evidence.deployer_holdings_pct,
+          );
+        }
+      }
+
+      // Compute network risk
+      const networkStats = getNetworkStats(deployerWallet);
+      funding.network_wallets = networkStats.network_wallets;
+      funding.network_tokens_affected = networkStats.network_tokens_affected;
+      funding.network_risk = networkStats.network_wallets >= 4 ? 'high'
+        : networkStats.network_wallets >= 1 ? 'medium'
+        : 'low';
+    } catch {
+      // best-effort
+    }
+
     // Step 8: Calculate reputation score (Bayesian)
-    const { score, verdict, breakdown } = calculateReputation({
+    const { score, verdict, verdict_reason, breakdown } = calculateReputation({
       deathRate,
       rugRate,
       tokenCount: totalTokens,
@@ -475,6 +540,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       },
       funding,
       verdict,
+      verdict_reason,
       score_breakdown: breakdown,
       token_risks: tokenRisks,
       market_data: marketData,

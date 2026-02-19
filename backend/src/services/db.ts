@@ -480,4 +480,94 @@ resetDailyUsage();
 // Reset daily usage every hour
 setInterval(() => resetDailyUsage(), 60 * 60 * 1000).unref();
 
+// Wallet appearances table — tracks wallets that appear as early holders across tokens
+db.exec(`
+  CREATE TABLE IF NOT EXISTS wallet_appearances (
+    wallet_address TEXT NOT NULL,
+    token_address TEXT NOT NULL,
+    deployer_wallet TEXT NOT NULL,
+    held_pct REAL,
+    first_seen TEXT,
+    PRIMARY KEY (wallet_address, token_address)
+  )
+`);
+
+const upsertWalletAppearanceStmt = db.prepare(`
+  INSERT INTO wallet_appearances (wallet_address, token_address, deployer_wallet, held_pct, first_seen)
+  VALUES (?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(wallet_address, token_address) DO UPDATE SET
+    held_pct = excluded.held_pct
+`);
+
+const getNetworkWalletsStmt = db.prepare(`
+  SELECT wallet_address, COUNT(DISTINCT token_address) as token_count
+  FROM wallet_appearances
+  WHERE deployer_wallet = ?
+  GROUP BY wallet_address
+  HAVING token_count >= 2
+`);
+
+const getNetworkStatsStmt = db.prepare(`
+  SELECT
+    COUNT(DISTINCT wa.wallet_address) as network_wallets,
+    COUNT(DISTINCT wa.token_address) as tokens_affected
+  FROM wallet_appearances wa
+  WHERE wa.deployer_wallet = ?
+  AND wa.wallet_address IN (
+    SELECT wallet_address FROM wallet_appearances
+    WHERE deployer_wallet = ?
+    GROUP BY wallet_address
+    HAVING COUNT(DISTINCT token_address) >= 2
+  )
+`);
+
+export function upsertWalletAppearance(
+  walletAddress: string,
+  tokenAddress: string,
+  deployerWallet: string,
+  heldPct: number | null,
+): void {
+  upsertWalletAppearanceStmt.run(walletAddress, tokenAddress, deployerWallet, heldPct);
+}
+
+export interface NetworkStats {
+  network_wallets: number;
+  network_tokens_affected: number;
+}
+
+export function getNetworkStats(deployerWallet: string): NetworkStats {
+  const row = getNetworkStatsStmt.get(deployerWallet, deployerWallet) as any;
+  return {
+    network_wallets: row?.network_wallets || 0,
+    network_tokens_affected: row?.tokens_affected || 0,
+  };
+}
+
+// x402 payments table — tracks confirmed on-chain USDC payments to prevent replay
+db.exec(`
+  CREATE TABLE IF NOT EXISTS x402_payments (
+    tx_signature TEXT PRIMARY KEY,
+    payer TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    endpoint TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+const checkPaymentUsedStmt = db.prepare(`
+  SELECT 1 FROM x402_payments WHERE tx_signature = ?
+`);
+
+const insertPaymentStmt = db.prepare(`
+  INSERT INTO x402_payments (tx_signature, payer, amount_usd, endpoint) VALUES (?, ?, ?, ?)
+`);
+
+export function isPaymentUsed(txSignature: string): boolean {
+  return !!checkPaymentUsedStmt.get(txSignature);
+}
+
+export function recordPayment(txSignature: string, payer: string, amountUsd: number, endpoint: string): void {
+  insertPaymentStmt.run(txSignature, payer, amountUsd, endpoint);
+}
+
 console.log(`[db] SQLite initialized at ${DB_PATH}`);

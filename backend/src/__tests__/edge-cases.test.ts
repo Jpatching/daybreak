@@ -39,6 +39,10 @@ vi.mock('../services/dexscreener', () => ({
   checkTokenStatus: vi.fn().mockResolvedValue({ alive: true, liquidity: 1000, volume24h: 50, priceUsd: 0.05, priceChange24h: null, fdv: null, marketCap: null, name: 'Test', symbol: 'TEST', pairCreatedAt: null, socials: null }),
 }));
 
+vi.mock('../services/death-classifier', () => ({
+  classifyDeaths: vi.fn().mockResolvedValue(new Map()),
+}));
+
 vi.mock('../services/reportcard', () => ({
   renderTwitterCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
   renderHistoryCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
@@ -60,6 +64,8 @@ vi.mock('../services/db', () => ({
   getStaleAliveTokens: vi.fn().mockReturnValue([]),
   markTokenDead: vi.fn(),
   saveReportCard: vi.fn(),
+  upsertWalletAppearance: vi.fn(),
+  getNetworkStats: vi.fn().mockReturnValue({ network_wallets: 0, network_tokens_affected: 0 }),
 }));
 
 vi.mock('../services/jupiter', () => ({
@@ -94,7 +100,7 @@ describe('Edge cases', () => {
     vi.clearAllMocks();
   });
 
-  it('handles zero-token deployer: 0 tokens, 0 rug rate, SUSPICIOUS verdict (low confidence)', async () => {
+  it('handles zero-token deployer: 0 tokens, 0 rug rate, CLEAN verdict', async () => {
     mockGetTokenMetadata.mockResolvedValue({ name: 'Ghost Token', symbol: 'GHOST' });
     mockFindDeployer.mockResolvedValue({ wallet: DEPLOYER_WALLET, creationSig: 'sig1', method: 'enhanced_api' });
     mockFindDeployerTokens.mockResolvedValue({ tokens: [], limitReached: false });
@@ -114,8 +120,10 @@ describe('Edge cases', () => {
     // Safety net ensures at least 1 token (the scanned one)
     expect(res.body.deployer.tokens_created).toBe(1);
     expect(res.body.deployer.rug_rate).toBe(0);
-    // Low confidence cap: <3 verified tokens → max SUSPICIOUS
-    expect(res.body.verdict).toBe('SUSPICIOUS');
+    // No more low-confidence cap — single clean token is CLEAN
+    expect(res.body.verdict).toBe('CLEAN');
+    expect(res.body.verdict_reason).toBeDefined();
+    expect(typeof res.body.verdict_reason).toBe('string');
   });
 
   it('safety net includes scanned token even when deployer history is empty', async () => {

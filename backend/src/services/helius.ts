@@ -60,11 +60,22 @@ export async function getParsedTransaction(signature: string): Promise<any> {
   return rpcCall('getTransaction', [signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }]);
 }
 
+// Known DEX program IDs for classification
+export const DEX_PROGRAM_IDS = new Set([
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8', // Raydium AMM v4
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',  // Jupiter Aggregator v6
+  'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C', // Raydium CPMM
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK', // Raydium CLMM
+  'PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP',   // PumpSwap
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc',   // Orca Whirlpool
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP', // Orca Token Swap v2
+]);
+
 /**
  * Get enhanced transaction history from Helius Enhanced API.
  * 100 txs per call — much more efficient than fetching 1-by-1.
  */
-async function getEnhancedTransactions(
+export async function getEnhancedTransactions(
   address: string,
   opts: { limit?: number; sortOrder?: 'asc' | 'desc'; type?: string; before?: string } = {}
 ): Promise<any[]> {

@@ -8,7 +8,7 @@ import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-const ENDPOINT = 'https://api.mainnet-beta.solana.com';
+const ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 export default function WalletProvider({ children }) {
   const wallets = useMemo(() => [

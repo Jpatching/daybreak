@@ -2,12 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { createHash } from 'crypto';
+import { isPaymentUsed, recordPayment } from './db';
 
 // x402 Payment Protocol — Solana USDC server middleware
-// Self-verified Ed25519 signatures (no external facilitator needed)
-// Spec inspiration: https://www.x402.org/
+// Supports two verification modes:
+// 1. On-chain USDC transfer verification (frontend web UI)
+// 2. Legacy Ed25519 signature verification (MCP/programmatic clients)
 
 const USDC_DECIMALS = 6;
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const MAX_PAYMENT_AGE_SECONDS = 600; // 10 minutes
 
 export interface X402ServerConfig {
@@ -83,7 +86,120 @@ export function send402(res: Response, config: X402ServerConfig, resource: strin
     });
 }
 
-interface X402PaymentPayload {
+// ---------- On-chain transaction verification ----------
+
+interface X402TxPayload {
+  txSignature: string;  // base58 Solana tx signature
+  payer: string;        // base58 public key of payer
+}
+
+/**
+ * Verify a real on-chain USDC transfer to the treasury.
+ * Fetches the transaction from Helius RPC, checks:
+ * 1. Transaction succeeded (no errors)
+ * 2. Recent enough (within MAX_PAYMENT_AGE_SECONDS)
+ * 3. USDC balance of treasury increased by at least the expected amount
+ * 4. Claimed payer is a signer on the transaction
+ * 5. Transaction hasn't been used before (replay protection)
+ *
+ * Returns the verified payer public key (base58) or null if invalid.
+ */
+async function verifyPaymentTransaction(
+  payload: X402TxPayload,
+  config: X402ServerConfig
+): Promise<string | null> {
+  try {
+    const { txSignature, payer } = payload;
+
+    if (!txSignature || !payer) return null;
+
+    // Check replay protection first (cheap DB lookup)
+    if (isPaymentUsed(txSignature)) {
+      console.error(`[x402] Transaction already used: ${txSignature}`);
+      return null;
+    }
+
+    // Fetch transaction from Helius RPC
+    const rpcUrl = process.env.SOLANA_RPC_URL || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getTransaction',
+        params: [txSignature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+      }),
+    });
+
+    const json = await res.json() as any;
+    const tx = json.result;
+    if (!tx) {
+      console.error(`[x402] Transaction not found: ${txSignature}`);
+      return null;
+    }
+
+    // Check transaction succeeded
+    if (tx.meta?.err) {
+      console.error(`[x402] Transaction failed on-chain: ${txSignature}`);
+      return null;
+    }
+
+    // Check recency
+    const txTime = tx.blockTime;
+    const now = Math.floor(Date.now() / 1000);
+    if (!txTime || Math.abs(now - txTime) > MAX_PAYMENT_AGE_SECONDS) {
+      console.error(`[x402] Transaction too old: blockTime=${txTime}, now=${now}`);
+      return null;
+    }
+
+    // Check USDC balance change via pre/post token balances
+    const expectedAmount = parseInt(usdToLamports(config.priceUsd));
+    const preBalances = tx.meta?.preTokenBalances || [];
+    const postBalances = tx.meta?.postTokenBalances || [];
+
+    let treasuryReceived = false;
+    for (const post of postBalances) {
+      if (post.mint !== USDC_MINT) continue;
+      if (post.owner !== config.payToWallet) continue;
+      const pre = preBalances.find(
+        (p: any) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT
+      );
+      const preBal = parseInt(pre?.uiTokenAmount?.amount || '0');
+      const postBal = parseInt(post.uiTokenAmount?.amount || '0');
+      if (postBal - preBal >= expectedAmount) {
+        treasuryReceived = true;
+        break;
+      }
+    }
+
+    if (!treasuryReceived) {
+      console.error(`[x402] Treasury did not receive expected USDC amount (>=${expectedAmount})`);
+      return null;
+    }
+
+    // Verify payer is a signer on the tx
+    const signers = tx.transaction?.message?.accountKeys
+      ?.filter((k: any) => k.signer)
+      ?.map((k: any) => k.pubkey) || [];
+    if (!signers.includes(payer)) {
+      console.error(`[x402] Claimed payer ${payer} is not a signer on tx`);
+      return null;
+    }
+
+    // Record payment to prevent replay
+    recordPayment(txSignature, payer, config.priceUsd, 'x402');
+
+    console.log(`[x402] On-chain payment verified: ${txSignature} from ${payer}`);
+    return payer;
+  } catch (err) {
+    console.error('[x402] Transaction verification error:', err);
+    return null;
+  }
+}
+
+// ---------- Legacy Ed25519 signature verification ----------
+
+interface X402SignaturePayload {
   paymentOption: {
     scheme: string;
     network: string;
@@ -99,32 +215,24 @@ interface X402PaymentPayload {
 }
 
 /**
- * Verify x402 payment payload by checking Ed25519 signature server-side.
- * 1. Reconstruct the canonical message from the payment option fields
- * 2. SHA-256 hash it
- * 3. Verify Ed25519 signature against the claimed payer's public key
- * 4. Check timestamp freshness and payment option matches our config
- *
- * Returns the verified payer public key (base58) or null if invalid.
+ * Legacy: Verify x402 payment via Ed25519 signature (no on-chain transfer).
+ * Used by MCP and programmatic clients.
  */
-function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerConfig): string | null {
+function verifyPaymentSignature(payload: X402SignaturePayload, config: X402ServerConfig): string | null {
   try {
     const { paymentOption, signature, payer, nonce, timestamp } = payload;
 
-    // Validate required fields
     if (!paymentOption || !signature || !payer || !nonce || !timestamp) {
-      console.error('[x402] Missing required fields in payment payload');
+      console.error('[x402] Missing required fields in signature payload');
       return null;
     }
 
-    // Check timestamp freshness (reject stale payments)
     const now = Math.floor(Date.now() / 1000);
     if (Math.abs(now - timestamp) > MAX_PAYMENT_AGE_SECONDS) {
       console.error(`[x402] Payment timestamp too old/future: ${timestamp} vs ${now}`);
       return null;
     }
 
-    // Verify payment option matches our config
     if (paymentOption.payTo !== config.payToWallet) {
       console.error(`[x402] payTo mismatch: ${paymentOption.payTo} !== ${config.payToWallet}`);
       return null;
@@ -136,7 +244,6 @@ function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerC
       return null;
     }
 
-    // Reconstruct the canonical message (must match client-side construction)
     const message = JSON.stringify({
       scheme: paymentOption.scheme,
       network: paymentOption.network,
@@ -148,11 +255,9 @@ function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerC
       validUntil: paymentOption.validUntil ?? timestamp + 300,
     });
 
-    // SHA-256 hash of the message
     const messageBytes = new TextEncoder().encode(message);
     const messageHash = createHash('sha256').update(messageBytes).digest();
 
-    // Decode payer public key and signature from base58
     let publicKeyBytes: Uint8Array;
     let signatureBytes: Uint8Array;
     try {
@@ -163,17 +268,11 @@ function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerC
       return null;
     }
 
-    if (publicKeyBytes.length !== 32) {
-      console.error(`[x402] Invalid public key length: ${publicKeyBytes.length}`);
+    if (publicKeyBytes.length !== 32 || signatureBytes.length !== 64) {
+      console.error('[x402] Invalid key/signature length');
       return null;
     }
 
-    if (signatureBytes.length !== 64) {
-      console.error(`[x402] Invalid signature length: ${signatureBytes.length}`);
-      return null;
-    }
-
-    // Verify Ed25519 signature
     const valid = nacl.sign.detached.verify(
       new Uint8Array(messageHash),
       signatureBytes,
@@ -185,7 +284,6 @@ function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerC
       return null;
     }
 
-    // Signature verified — return the proven payer identity
     return payer;
   } catch (err) {
     console.error('[x402] Signature verification error:', err);
@@ -193,10 +291,15 @@ function verifyPaymentSignature(payload: X402PaymentPayload, config: X402ServerC
   }
 }
 
+// ---------- Middleware ----------
+
 /**
- * x402 middleware for paid endpoints (agents/bots, no JWT required).
- * If X-PAYMENT header present → verify Ed25519 signature server-side → allow.
- * Otherwise → 402 with USDC payment instructions.
+ * x402 middleware for paid endpoints.
+ * Supports two payment modes:
+ * 1. On-chain USDC transfer (payload has `txSignature`) — used by web UI
+ * 2. Legacy Ed25519 signature (payload has `signature` + `paymentOption`) — used by MCP/bots
+ *
+ * If no X-PAYMENT header → returns 402 with payment instructions.
  */
 export function createX402Middleware(config: X402ServerConfig) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -214,7 +317,7 @@ export function createX402Middleware(config: X402ServerConfig) {
       return;
     }
 
-    let payload: X402PaymentPayload;
+    let payload: any;
     try {
       payload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
     } catch (err) {
@@ -223,10 +326,22 @@ export function createX402Middleware(config: X402ServerConfig) {
       return;
     }
 
-    // Verify Ed25519 signature server-side (proves wallet ownership)
-    const verifiedPayer = verifyPaymentSignature(payload, config);
+    // Determine payment mode and verify
+    let verifiedPayer: string | null;
+
+    if ('txSignature' in payload) {
+      // New: real on-chain USDC transfer
+      verifiedPayer = await verifyPaymentTransaction(payload as X402TxPayload, config);
+    } else if ('signature' in payload && 'paymentOption' in payload) {
+      // Legacy: Ed25519 signature only (for MCP/programmatic clients)
+      verifiedPayer = verifyPaymentSignature(payload as X402SignaturePayload, config);
+    } else {
+      res.status(400).json({ error: 'Invalid payment payload format' });
+      return;
+    }
+
     if (!verifiedPayer) {
-      res.status(402).json({ error: 'Payment verification failed. Invalid signature or stale payment.' });
+      res.status(402).json({ error: 'Payment verification failed. Invalid transaction or stale payment.' });
       return;
     }
 

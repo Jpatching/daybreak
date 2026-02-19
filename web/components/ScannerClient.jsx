@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey, Transaction } from '@solana/web3.js';
+import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/spl-token';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '@/hooks/useAuth';
 import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, fetchRecentScans, PaymentRequiredError } from '@/lib/api';
@@ -108,6 +111,12 @@ function UsageBadge({ usage }) {
         <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
           <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
         </div>
+        {remaining === 0 && (
+          <p className="text-xs text-amber-400/80 mt-1.5">$0.01 per extra scan via x402</p>
+        )}
+        {remaining === 1 && (
+          <p className="text-xs text-slate-500 mt-1.5">Last free scan — paid scans $0.01 each</p>
+        )}
       </div>
     </div>
   );
@@ -309,6 +318,10 @@ function solscanUrl(addr) {
   return `https://solscan.io/account/${addr}`;
 }
 
+const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+const USDC_DECIMALS = 6;
+const TREASURY_WALLET = new PublicKey('5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2');
+
 const ERROR_MESSAGES = {
   AUTH_REQUIRED: 'Please connect your wallet and sign in to scan.',
   RATE_LIMITED: 'Daily scan limit reached. You get 3 free scans per day.',
@@ -398,7 +411,8 @@ function ScannerIdleState({ connected, isAuthenticated }) {
 
 export default function ScannerClient({ initialAddress }) {
   const router = useRouter();
-  const { connected, publicKey, signMessage } = useWallet();
+  const { connection } = useConnection();
+  const { connected, publicKey, signMessage, sendTransaction } = useWallet();
   const { isAuthenticated, token, login, loading: authLoading, error: authError } = useAuth();
 
   const [query, setQuery] = useState(initialAddress || '');
@@ -490,52 +504,36 @@ export default function ScannerClient({ initialAddress }) {
   }
 
   async function handlePayAndScan() {
-    if (!paymentInfo || !publicKey || !signMessage) return;
+    if (!paymentInfo || !publicKey || !sendTransaction) return;
 
     setPaying(true);
     setError(null);
 
     try {
-      const details = paymentInfo.details;
-      if (!details?.accepts?.length) {
-        throw new Error('No payment options available');
-      }
+      const amountLamports = Math.round(paymentInfo.priceUsd * Math.pow(10, USDC_DECIMALS));
 
-      const option = details.accepts[0];
-      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-      const timestamp = Math.floor(Date.now() / 1000);
+      // Get ATAs for sender and treasury
+      const senderAta = await getAssociatedTokenAddress(USDC_MINT, publicKey);
+      const treasuryAta = await getAssociatedTokenAddress(USDC_MINT, TREASURY_WALLET);
 
-      const message = JSON.stringify({
-        scheme: option.scheme,
-        network: option.network,
-        asset: option.asset,
-        amount: option.maxAmountRequired,
-        payTo: option.payTo,
-        nonce,
-        timestamp,
-        validUntil: option.validUntil ?? timestamp + 300,
-      });
+      // Build transfer instruction
+      const ix = createTransferInstruction(senderAta, treasuryAta, publicKey, amountLamports);
 
-      const messageBytes = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', messageBytes);
-      const hashArray = new Uint8Array(hashBuffer);
+      const tx = new Transaction().add(ix);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signatureBytes = await signMessage(hashArray);
+      // Send via wallet adapter (signs + broadcasts)
+      const signature = await sendTransaction(tx, connection);
 
-      const bs58Module = await import('bs58');
-      const signature = bs58Module.default.encode(signatureBytes);
+      // Wait for confirmation
+      await connection.confirmTransaction(signature, 'confirmed');
 
-      const payload = {
-        paymentOption: option,
-        signature,
-        payer: publicKey.toBase58(),
-        nonce,
-        timestamp,
-      };
-
+      // Build payment header with tx signature
+      const payload = { txSignature: signature, payer: publicKey.toBase58() };
       const paymentHeader = btoa(JSON.stringify(payload));
 
+      // Now scan
       setScanning(true);
       setScanStep(0);
       const stepInterval = setInterval(() => {
@@ -552,7 +550,13 @@ export default function ScannerClient({ initialAddress }) {
       }
     } catch (err) {
       setPaymentInfo(null);
-      setError(`Payment failed: ${err.message}`);
+      if (err.message?.includes('User rejected')) {
+        setError('Transaction cancelled.');
+      } else if (err.message?.includes('insufficient') || err.message?.includes('0x1')) {
+        setError('Insufficient USDC balance. You need at least $0.01 USDC.');
+      } else {
+        setError(`Payment failed: ${err.message}`);
+      }
     } finally {
       setPaying(false);
     }
@@ -602,6 +606,15 @@ export default function ScannerClient({ initialAddress }) {
               Scan
             </button>
           </form>
+
+          {isAuthenticated && usage && usage.scans_remaining <= 0 && !scanning && !result && (
+            <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+              <CreditCard size={14} className="text-amber-400 flex-shrink-0" />
+              <p className="text-sm text-amber-400/90">
+                Free scans used up. Next scan costs $0.01 USDC — you&apos;ll send a USDC transfer to complete.
+              </p>
+            </div>
+          )}
 
           {connected && !isAuthenticated && authLoading && (
             <div className="text-center py-4">
@@ -995,6 +1008,17 @@ export default function ScannerClient({ initialAddress }) {
 
               <ScoreBreakdownCard breakdown={result.score_breakdown} />
 
+              {/* Unverified tokens warning */}
+              {result.deployer.tokens_unverified > 0 && result.deployer.tokens_created > 0 &&
+                (result.deployer.tokens_unverified / result.deployer.tokens_created) > 0.2 && (
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-start gap-3">
+                  <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-400/90">
+                    {result.deployer.tokens_unverified} of {result.deployer.tokens_created} tokens could not be verified via DexScreener — death rate may be understated.
+                  </p>
+                </div>
+              )}
+
               {/* Token list */}
               {result.deployer.tokens && result.deployer.tokens.length > 0 && (
                 <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
@@ -1039,12 +1063,21 @@ export default function ScannerClient({ initialAddress }) {
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 t.alive === null ? 'bg-slate-500/20 text-slate-400'
                                   : t.alive ? 'bg-green-500/20 text-green-400'
-                                  : 'bg-red-500/20 text-red-400'
+                                  : t.death_type === 'likely_rug' ? 'bg-red-500/20 text-red-400'
+                                  : t.death_type === 'distributed_rug' ? 'bg-red-500/20 text-red-400'
+                                  : t.death_type === 'natural' ? 'bg-slate-500/20 text-slate-400'
+                                  : 'bg-yellow-500/20 text-yellow-400'
                               }`}>
                                 {t.alive === null ? (
                                   <><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Unverified</>
                                 ) : t.alive ? (
                                   <><CheckCircle2 size={10} /> Alive</>
+                                ) : t.death_type === 'likely_rug' ? (
+                                  <><Skull size={10} /> Rug</>
+                                ) : t.death_type === 'distributed_rug' ? (
+                                  <><Skull size={10} /> Distributed Rug</>
+                                ) : t.death_type === 'natural' ? (
+                                  <><XCircle size={10} /> Natural Death</>
                                 ) : (
                                   <><XCircle size={10} /> Dead</>
                                 )}
@@ -1135,6 +1168,24 @@ export default function ScannerClient({ initialAddress }) {
                       )}
                     </div>
                   </div>
+                  {result.funding.network_wallets > 0 && (
+                    <div className="col-span-2 md:col-span-3 pt-4 border-t border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          result.funding.network_risk === 'high' ? 'bg-red-400'
+                            : result.funding.network_risk === 'medium' ? 'bg-yellow-400'
+                            : 'bg-green-400'
+                        }`} />
+                        <span className={`text-sm font-medium ${
+                          result.funding.network_risk === 'high' ? 'text-red-400'
+                            : result.funding.network_risk === 'medium' ? 'text-yellow-400'
+                            : 'text-green-400'
+                        }`}>
+                          Funding cluster includes {result.funding.network_wallets} wallet{result.funding.network_wallets !== 1 ? 's' : ''} that appear across {result.funding.network_tokens_affected} tokens as early holders
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1164,11 +1215,13 @@ export default function ScannerClient({ initialAddress }) {
                         : 'Serial Rugger Detected'}
                     </h3>
                     <p className="text-sm text-slate-400">
-                      {result.verdict === 'CLEAN'
-                        ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate with a trust score of ${result.deployer.reputation_score}/100. Relatively safe.`
-                        : result.verdict === 'SUSPICIOUS'
-                        ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate. Exercise caution before investing.`
-                        : `This deployer has killed ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate). Do NOT invest.`}
+                      {result.verdict_reason || (
+                        result.verdict === 'CLEAN'
+                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate with a trust score of ${result.deployer.reputation_score}/100. Relatively safe.`
+                          : result.verdict === 'SUSPICIOUS'
+                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate. Exercise caution before investing.`
+                          : `This deployer has killed ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate). Do NOT invest.`
+                      )}
                     </p>
                   </div>
                 </div>

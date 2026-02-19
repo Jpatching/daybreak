@@ -34,6 +34,16 @@ vi.mock('../services/helius', () => ({
 
 vi.mock('../services/dexscreener', () => ({
   bulkCheckTokens: mockBulkCheckTokens,
+  checkTokenStatus: vi.fn().mockResolvedValue({ alive: true, liquidity: 1000, volume24h: 50, priceUsd: 0.05, priceChange24h: null, fdv: null, marketCap: null, name: 'Test', symbol: 'TEST', pairCreatedAt: null, socials: null }),
+}));
+
+vi.mock('../services/death-classifier', () => ({
+  classifyDeaths: vi.fn().mockResolvedValue(new Map()),
+}));
+
+vi.mock('../services/reportcard', () => ({
+  renderTwitterCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
+  renderHistoryCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
 }));
 
 vi.mock('../services/db', () => ({
@@ -51,6 +61,9 @@ vi.mock('../services/db', () => ({
   upsertDeployerTokens: vi.fn(),
   getStaleAliveTokens: vi.fn().mockReturnValue([]),
   markTokenDead: vi.fn(),
+  saveReportCard: vi.fn(),
+  upsertWalletAppearance: vi.fn(),
+  getNetworkStats: vi.fn().mockReturnValue({ network_wallets: 0, network_tokens_affected: 0 }),
 }));
 
 vi.mock('../services/jupiter', () => ({
@@ -111,6 +124,8 @@ describe('Deployer scan endpoint', () => {
     expect(res.body.deployer.reputation_score).toBeGreaterThanOrEqual(0);
     expect(res.body.deployer.reputation_score).toBeLessThanOrEqual(100);
     expect(res.body).toHaveProperty('verdict');
+    expect(res.body).toHaveProperty('verdict_reason');
+    expect(typeof res.body.verdict_reason).toBe('string');
     expect(res.body).toHaveProperty('score_breakdown');
     expect(res.body.score_breakdown).toHaveProperty('rug_rate_component');
     expect(res.body.score_breakdown).toHaveProperty('details');
