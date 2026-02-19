@@ -32,6 +32,7 @@ export default function Nav() {
   const navLinks = [
     { href: '/scan', label: 'Scanner' },
     { href: '/leaderboard', label: 'Leaderboard' },
+    { href: '/profile', label: 'Profile' },
     { href: '/blog', label: 'Blog' },
     { href: '/docs', label: 'Docs' },
   ];

@@ -36,6 +36,12 @@ vi.mock('../services/helius', () => ({
 
 vi.mock('../services/dexscreener', () => ({
   bulkCheckTokens: mockBulkCheckTokens,
+  checkTokenStatus: vi.fn().mockResolvedValue({ alive: true, liquidity: 1000, volume24h: 50, priceUsd: 0.05, priceChange24h: null, fdv: null, marketCap: null, name: 'Test', symbol: 'TEST', pairCreatedAt: null, socials: null }),
+}));
+
+vi.mock('../services/reportcard', () => ({
+  renderTwitterCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
+  renderHistoryCard: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
 }));
 
 vi.mock('../services/db', () => ({
@@ -53,6 +59,7 @@ vi.mock('../services/db', () => ({
   upsertDeployerTokens: vi.fn(),
   getStaleAliveTokens: vi.fn().mockReturnValue([]),
   markTokenDead: vi.fn(),
+  saveReportCard: vi.fn(),
 }));
 
 vi.mock('../services/jupiter', () => ({
@@ -87,7 +94,7 @@ describe('Edge cases', () => {
     vi.clearAllMocks();
   });
 
-  it('handles zero-token deployer: 0 tokens, 0 rug rate, CLEAN verdict', async () => {
+  it('handles zero-token deployer: 0 tokens, 0 rug rate, SUSPICIOUS verdict (low confidence)', async () => {
     mockGetTokenMetadata.mockResolvedValue({ name: 'Ghost Token', symbol: 'GHOST' });
     mockFindDeployer.mockResolvedValue({ wallet: DEPLOYER_WALLET, creationSig: 'sig1', method: 'enhanced_api' });
     mockFindDeployerTokens.mockResolvedValue({ tokens: [], limitReached: false });
@@ -107,7 +114,8 @@ describe('Edge cases', () => {
     // Safety net ensures at least 1 token (the scanned one)
     expect(res.body.deployer.tokens_created).toBe(1);
     expect(res.body.deployer.rug_rate).toBe(0);
-    expect(res.body.verdict).toBe('CLEAN');
+    // Low confidence cap: <3 verified tokens → max SUSPICIOUS
+    expect(res.body.verdict).toBe('SUSPICIOUS');
   });
 
   it('safety net includes scanned token even when deployer history is empty', async () => {

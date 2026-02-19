@@ -288,6 +288,18 @@ function ShareRow({ result, address }) {
 
 // ---------- Helpers ----------
 
+function formatPrice(price) {
+  if (price == null) return '-';
+  if (price >= 1) return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  if (price >= 0.01) return `$${price.toFixed(4)}`;
+  // For very small prices, show up to 8 significant decimals, trim trailing zeros
+  const str = price.toFixed(10);
+  // Find first non-zero digit after decimal
+  const match = str.match(/^0\.(0*[1-9]\d{0,7})/);
+  if (match) return `$0.${match[1]}`;
+  return `$${price.toFixed(8).replace(/0+$/, '')}`;
+}
+
 function truncAddr(addr) {
   if (!addr) return '...';
   return addr.slice(0, 4) + '...' + addr.slice(-4);
@@ -696,9 +708,7 @@ export default function ScannerClient({ initialAddress }) {
                           <div className="text-sm">
                             <span className="text-slate-500">Price: </span>
                             <span className="text-white font-mono">
-                              ${result.market_data.price_usd < 0.01
-                                ? result.market_data.price_usd.toExponential(2)
-                                : result.market_data.price_usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                              {formatPrice(result.market_data.price_usd)}
                             </span>
                           </div>
                         )}
@@ -1027,16 +1037,21 @@ export default function ScannerClient({ initialAddress }) {
                             <td className="py-2 pr-4 text-slate-400">{t.symbol || '???'}</td>
                             <td className="py-2 pr-4">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                t.alive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                t.alive === null ? 'bg-slate-500/20 text-slate-400'
+                                  : t.alive ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-red-500/20 text-red-400'
                               }`}>
-                                {t.alive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
-                                {t.alive ? 'Alive' : 'Dead'}
+                                {t.alive === null ? (
+                                  <><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Unverified</>
+                                ) : t.alive ? (
+                                  <><CheckCircle2 size={10} /> Alive</>
+                                ) : (
+                                  <><XCircle size={10} /> Dead</>
+                                )}
                               </span>
                             </td>
                             <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
-                              {t.price_usd != null
-                                ? `$${t.price_usd < 0.01 ? t.price_usd.toExponential(1) : t.price_usd.toFixed(4)}`
-                                : '-'}
+                              {formatPrice(t.price_usd)}
                             </td>
                             <td className={`py-2 pr-4 text-right font-mono text-xs ${
                               t.price_change_24h == null ? 'text-slate-600'

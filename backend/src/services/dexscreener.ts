@@ -81,7 +81,7 @@ function parsePairs(pairs: DexScreenerPair[]): {
   const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
   const hasVolume = totalVolume24h > 0;
   const isNew = ageHours < 24;
-  const isAlive = hasLiquidity || hasVolume || isNew;
+  const isAlive = hasLiquidity || hasVolume || (isNew && totalLiquidity > 0);
 
   return {
     totalLiquidity, totalVolume24h, priceUsd, priceChange24h,

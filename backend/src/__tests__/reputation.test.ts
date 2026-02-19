@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { calculateReputation, type RiskPenalties } from '../services/reputation';
 
 // Helper to build minimal input with defaults
+// NOTE: verifiedCount defaults to max(tokenCount, 3) to avoid low-confidence cap in most tests.
+// Tests that specifically test the low-confidence cap should override verifiedCount explicitly.
 function repInput(overrides: {
   deathRate?: number;
   rugRate?: number;
@@ -17,7 +19,7 @@ function repInput(overrides: {
     deathRate,
     rugRate: overrides.rugRate ?? deathRate,
     tokenCount,
-    verifiedCount: overrides.verifiedCount ?? tokenCount,
+    verifiedCount: overrides.verifiedCount ?? Math.max(tokenCount, 3),
     avgLifespanDays: overrides.avgLifespanDays ?? 30,
     clusterSize: overrides.clusterSize ?? 0,
     riskPenalties: overrides.riskPenalties,
@@ -51,21 +53,21 @@ describe('calculateReputation', () => {
   });
 
   describe('rug rate component (40% weight)', () => {
-    it('gives ~23 points for 0% rug rate with 1 token (Bayesian pulls toward prior)', () => {
+    it('gives ~27.5 points for 0% rug rate with verifiedCount=3 (Bayesian pulls toward prior)', () => {
       const { score } = calculateReputation(repInput({ rugRate: 0, tokenCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
-      // Bayesian: (0*1 + 0.5*5) / (1+5) = 0.417 → deathComponent ≈ 23.3
-      expect(score).toBe(83);
+      // Bayesian: (0*3 + 0.5*5) / (3+5) = 0.3125 → deathComponent ≈ 27.5
+      expect(score).toBe(88);
     });
 
     it('gives 20 points for 50% rug rate (Bayesian matches prior exactly)', () => {
       const { score } = calculateReputation(repInput({ rugRate: 0.5, tokenCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
-      // Bayesian: (0.5*1 + 2.5) / 6 = 0.5 → deathComponent = 20
+      // Bayesian: (0.5*3 + 2.5) / 8 = 0.5 → deathComponent = 20
       expect(score).toBe(80);
     });
 
-    it('gives reduced points for 100% rug rate (Bayesian softens with 1 token)', () => {
+    it('gives reduced points for 100% rug rate (Bayesian softens with 3 tokens)', () => {
       const { score } = calculateReputation(repInput({ rugRate: 1.0, tokenCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
-      // Bayesian: (1*1 + 2.5) / 6 = 0.583 → deathComponent ≈ 16.7, score ≈ 77
+      // Bayesian: (1.0*3 + 2.5) / 8 = 0.6875 → deathComponent ≈ 12.5, score ≈ 73
       expect(score).toBeLessThanOrEqual(80);
       expect(score).toBeGreaterThanOrEqual(70);
     });
@@ -74,8 +76,8 @@ describe('calculateReputation', () => {
   describe('token count penalty (20% weight, log scale)', () => {
     it('gives 20 points for 1 token with 0% rug rate (Bayesian reduces death component)', () => {
       const { score } = calculateReputation(repInput({ tokenCount: 1, rugRate: 0, avgLifespanDays: 40 }));
-      // Bayesian pulls deathRate toward 0.5 prior → score 83, not 100
-      expect(score).toBe(83);
+      // Bayesian: (0*3 + 2.5) / 8 = 0.3125, deathComponent = 27.5, score = 88
+      expect(score).toBe(88);
     });
 
     it('scales penalty by rug rate', () => {
@@ -116,15 +118,15 @@ describe('calculateReputation', () => {
   describe('cluster penalty (20% weight)', () => {
     it('gives 20 points for cluster size 0', () => {
       const { score } = calculateReputation(repInput({ clusterSize: 0, rugRate: 0, tokenCount: 1, avgLifespanDays: 40 }));
-      // Bayesian prior reduces death component: score 83 not 100
-      expect(score).toBe(83);
+      // Bayesian: (0*3 + 2.5) / 8 = 0.3125, deathComp = 27.5, score = 88
+      expect(score).toBe(88);
     });
 
     it('gives 0 points for cluster size >= 10', () => {
       const at10 = calculateReputation(repInput({ clusterSize: 10, rugRate: 0, tokenCount: 1, avgLifespanDays: 40 }));
       const at15 = calculateReputation(repInput({ clusterSize: 15, rugRate: 0, tokenCount: 1, avgLifespanDays: 40 }));
-      // Bayesian: base is 83 (not 100), minus 20 for cluster = 63
-      expect(at10.score).toBe(63);
+      // Bayesian: base is 88, minus 20 for cluster = 68
+      expect(at10.score).toBe(68);
       expect(at15.score).toBe(at10.score);
     });
 
@@ -267,8 +269,8 @@ describe('calculateReputation', () => {
 
     it('does not apply deductions when riskPenalties is undefined', () => {
       const without = calculateReputation(repInput({ avgLifespanDays: 40 }));
-      // Bayesian prior reduces score from 100 to 83 for 1-token deployer
-      expect(without.score).toBe(83);
+      // Bayesian: (0*3 + 2.5) / 8 = 0.3125, score = 88
+      expect(without.score).toBe(88);
     });
   });
 
@@ -320,10 +322,16 @@ describe('calculateReputation', () => {
       expect(verdict).toBe('SUSPICIOUS');
     });
 
-    it('returns CLEAN when score >= 60', () => {
+    it('returns CLEAN when score >= 60 and verifiedCount >= 3', () => {
       const { verdict, score } = calculateReputation(repInput({ rugRate: 0, tokenCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
       expect(score).toBeGreaterThanOrEqual(60);
       expect(verdict).toBe('CLEAN');
+    });
+
+    it('caps score at 59 when verifiedCount < 3 (low confidence)', () => {
+      const { verdict, score } = calculateReputation(repInput({ rugRate: 0, tokenCount: 1, verifiedCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
+      expect(score).toBe(59);
+      expect(verdict).toBe('SUSPICIOUS');
     });
   });
 
@@ -359,7 +367,7 @@ describe('calculateReputation', () => {
       expect(verdict).toBe('SERIAL_RUGGER');
     });
 
-    it('1 token / 0% rug → CLEAN with Bayesian-adjusted score', () => {
+    it('1 token / 0% rug → CLEAN with Bayesian-adjusted score (verifiedCount >= 3)', () => {
       const { verdict, score } = calculateReputation(repInput({
         rugRate: 0,
         tokenCount: 1,
@@ -367,8 +375,20 @@ describe('calculateReputation', () => {
         clusterSize: 0,
       }));
       expect(verdict).toBe('CLEAN');
-      // Bayesian prior pulls 0% toward 50% → score 83 (not 100)
-      expect(score).toBe(83);
+      // Bayesian: (0*3 + 2.5) / 8 = 0.3125, score = 88
+      expect(score).toBe(88);
+    });
+
+    it('1 token / 0% rug → SUSPICIOUS when verifiedCount < 3 (low confidence cap)', () => {
+      const { verdict, score } = calculateReputation(repInput({
+        rugRate: 0,
+        tokenCount: 1,
+        verifiedCount: 1,
+        avgLifespanDays: 40,
+        clusterSize: 0,
+      }));
+      expect(verdict).toBe('SUSPICIOUS');
+      expect(score).toBe(59);
     });
 
     it('perfect deployer with all risk flags → reduced score', () => {

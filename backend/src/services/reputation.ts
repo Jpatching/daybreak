@@ -125,7 +125,13 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
   }
 
   const rawScore = deathComponent + tokenPenalty + lifespanScore + clusterPenalty;
-  const score = Math.max(0, Math.round(rawScore) - riskDeduction);
+  let score = Math.max(0, Math.round(rawScore) - riskDeduction);
+
+  // Low-confidence cap: deployers with <3 verified tokens can't earn CLEAN
+  if (input.verifiedCount < 3 && score > 59) {
+    score = 59;
+    details.push(`Low sample size (${input.verifiedCount} verified tokens): score capped at 59`);
+  }
 
   const breakdown: ScoreBreakdown = {
     rug_rate_component: deathComponent,

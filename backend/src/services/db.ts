@@ -387,8 +387,8 @@ const getMostScannedStmt = db.prepare(`
 const getMostNotoriousStmt = db.prepare(`
   SELECT d.deployer_wallet,
          COUNT(*) as token_count,
-         SUM(CASE WHEN d.alive = 0 THEN 1 ELSE 0 END) as dead_count,
-         ROUND(CAST(SUM(CASE WHEN d.alive = 0 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100, 1) as rug_rate,
+         SUM(CASE WHEN d.alive = 0 OR d.alive = -1 THEN 1 ELSE 0 END) as dead_count,
+         ROUND(CAST(SUM(CASE WHEN d.alive = 0 OR d.alive = -1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100, 1) as rug_rate,
          MAX(d.last_checked) as last_seen
   FROM deployer_cache d
   GROUP BY d.deployer_wallet

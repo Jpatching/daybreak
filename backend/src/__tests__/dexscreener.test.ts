@@ -68,12 +68,23 @@ describe('checkTokenStatus', () => {
     expect(result.alive).toBe(true);
   });
 
-  it('returns alive when pair < 24h old (even with no liquidity/volume)', async () => {
+  it('returns dead when pair < 24h old but $0 liquidity and $0 volume', async () => {
     const addr = uniqueAddr();
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ pairs: [makePair({ address: addr, liquidity: 0, volume: 0, pairCreatedAt: oneHourAgo })] }),
+    });
+    const result = await checkTokenStatus(addr);
+    expect(result.alive).toBe(false);
+  });
+
+  it('returns alive when pair < 24h old with some liquidity', async () => {
+    const addr = uniqueAddr();
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ pairs: [makePair({ address: addr, liquidity: 50, volume: 0, pairCreatedAt: oneHourAgo })] }),
     });
     const result = await checkTokenStatus(addr);
     expect(result.alive).toBe(true);

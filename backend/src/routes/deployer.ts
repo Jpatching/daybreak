@@ -14,7 +14,7 @@ import {
   checkBundledLaunch,
   getWalletSolBalance,
 } from '../services/helius';
-import { bulkCheckTokens } from '../services/dexscreener';
+import { bulkCheckTokens, checkTokenStatus } from '../services/dexscreener';
 import { getTokenPrice } from '../services/jupiter';
 import { getTokenReport } from '../services/rugcheck';
 import { calculateReputation, type RiskPenalties } from '../services/reputation';
@@ -24,7 +24,11 @@ import {
   getCachedDeployerTokens,
   upsertDeployerTokens,
   getStaleAliveTokens,
+  saveReportCard,
 } from '../services/db';
+import { renderTwitterCard } from '../services/reportcard';
+import fs from 'fs';
+import pathModule from 'path';
 import type {
   DeployerScan, DeployerToken, FundingInfo, TokenRisks,
   TokenMarketData, RugCheckResult,
@@ -160,6 +164,14 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       tokenStatuses = await bulkCheckTokens(deployerTokenMints);
     }
 
+    // Always fetch fresh DexScreener data for the scanned token specifically
+    try {
+      const freshScannedStatus = await checkTokenStatus(token_address);
+      if (freshScannedStatus.liquidity > 0 || freshScannedStatus.priceUsd !== null) {
+        tokenStatuses.set(token_address, freshScannedStatus);
+      }
+    } catch { /* best-effort */ }
+
     // Step 5: Build token list
     const tokens: DeployerToken[] = [];
     let deadCount = 0;
@@ -213,6 +225,36 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         created_at: status.pairCreatedAt || null,
         dexscreener_url: `https://dexscreener.com/solana/${mint}`,
       });
+    }
+
+    // Append unverified tokens (limited to first 50) with alive: null
+    if (unverifiedMints.length > 0) {
+      const unverifiedBatch = unverifiedMints.slice(0, 50);
+      const unverifiedMeta = await Promise.all(
+        unverifiedBatch.map(async (mint) => {
+          try {
+            const meta = await getTokenMetadata(mint);
+            return { mint, name: meta.name, symbol: meta.symbol };
+          } catch {
+            return { mint, name: 'Unknown', symbol: '???' };
+          }
+        })
+      );
+      for (const { mint, name, symbol } of unverifiedMeta) {
+        tokens.push({
+          address: mint,
+          name: sanitizeString(name),
+          symbol: sanitizeString(symbol),
+          alive: null as any,
+          liquidity: 0,
+          price_usd: null,
+          price_change_24h: null,
+          volume_24h: null,
+          fdv: null,
+          created_at: null,
+          dexscreener_url: `https://dexscreener.com/solana/${mint}`,
+        });
+      }
     }
 
     const totalTokens = deployerTokenMints.length;
@@ -450,6 +492,20 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       : req.headers['x-payment'] ? 'x402'
       : 'auth';
     logScan(token_address, verdict, score, scanSource, req.wallet || null);
+
+    // Fire-and-forget: generate twitter report card for OG image sharing
+    (async () => {
+      try {
+        const cardDir = pathModule.resolve(__dirname, '../../data/cards', token_address);
+        if (!fs.existsSync(cardDir)) fs.mkdirSync(cardDir, { recursive: true });
+        const cardPath = pathModule.join(cardDir, 'twitter.png');
+        const pngBuffer = await renderTwitterCard(result);
+        fs.writeFileSync(cardPath, pngBuffer);
+        saveReportCard(token_address, 'twitter', cardPath, verdict, score);
+      } catch (err) {
+        console.error('[report-card] Auto-generation failed:', err instanceof Error ? err.message : err);
+      }
+    })();
 
     res.json(result);
   } catch (err: unknown) {
