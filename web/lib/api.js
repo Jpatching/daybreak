@@ -98,3 +98,9 @@ export async function fetchUsage(token) {
 export async function fetchScanHistory(token) {
   return apiFetch(`${API_BASE}/auth/history`, token);
 }
+
+export async function fetchLeaderboard(tab = 'most_scanned') {
+  const res = await fetch(`${API_BASE}/leaderboard?tab=${tab}`);
+  if (!res.ok) return [];
+  return res.json();
+}

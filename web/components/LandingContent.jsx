@@ -6,7 +6,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { fetchStats, fetchRecentScans } from '@/lib/api';
+import { fetchStats, fetchRecentScans, fetchLeaderboard } from '@/lib/api';
 import {
   Shield,
   Search,
@@ -138,6 +138,52 @@ function RecentScansFeed() {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Leaderboard Preview ----------
+
+function LeaderboardPreview() {
+  const [notorious, setNotorious] = useState([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetchLeaderboard('notorious').then(data => { if (data?.length) setNotorious(data.slice(0, 5)); }).catch(() => {});
+  }, []);
+
+  if (notorious.length === 0) return null;
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+          <Skull size={12} /> Most Notorious Deployers
+        </p>
+        <Link href="/leaderboard" className="text-xs text-amber-400 hover:text-amber-300 transition-colors">
+          View all &rarr;
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {notorious.map((row, i) => (
+          <button
+            key={row.deployer_wallet}
+            onClick={() => router.push(`/scan/${row.deployer_wallet}`)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-700/50 hover:border-red-500/30 transition-all text-left bg-red-500/5"
+          >
+            <span className="text-xs text-slate-500 font-mono w-5">{i + 1}</span>
+            <Skull size={14} className="text-red-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-white font-mono">{truncAddr(row.deployer_wallet)}</span>
+              <span className="text-xs text-slate-500 ml-2">{row.token_count} tokens</span>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <span className="text-sm font-bold font-mono text-red-400">{row.rug_rate}%</span>
+              <span className="block text-[10px] text-red-400/70">rug rate</span>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -400,6 +446,7 @@ export default function LandingContent() {
 
               <LiveStats />
               <RecentScansFeed />
+              <LeaderboardPreview />
             </div>
 
             {/* Right - Terminal Preview */}

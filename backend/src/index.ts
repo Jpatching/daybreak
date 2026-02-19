@@ -19,7 +19,7 @@ import { closeBrowser } from './services/reportcard';
 import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigrations, getPumpPortalStatus } from './services/pumpportal';
 
 // Import db to trigger SQLite init + admin seeding on startup
-import { getStats, getRecentScans, getWalletHistory } from './services/db';
+import { getStats, getRecentScans, getWalletHistory, getMostScanned, getMostNotorious } from './services/db';
 
 export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -85,6 +85,16 @@ app.get('/api/v1/stats', (_req, res) => {
 app.get('/api/v1/recent', (_req, res) => {
   const recent = getRecentScans(5);
   res.json(recent);
+});
+
+// Leaderboard endpoint (public)
+app.get('/api/v1/leaderboard', (_req, res) => {
+  const tab = (_req.query as any).tab || 'most_scanned';
+  if (tab === 'notorious') {
+    res.json(getMostNotorious(20));
+  } else {
+    res.json(getMostScanned(20));
+  }
 });
 
 // Wallet scan history (requires auth, no rate limit count)

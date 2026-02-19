@@ -366,6 +366,62 @@ export function getRecentCards(limit: number = 20): ReportCardRow[] {
   return getRecentCardsStmt.all(limit) as ReportCardRow[];
 }
 
+// Leaderboard queries
+
+const getMostScannedStmt = db.prepare(`
+  SELECT s.token_address,
+         COUNT(*) as scan_count,
+         s.verdict,
+         s.score,
+         d.token_name,
+         d.token_symbol
+  FROM scan_log s
+  LEFT JOIN deployer_cache d ON s.token_address = d.token_address
+  WHERE s.scanned_at >= datetime('now', '-7 days')
+    AND s.verdict IS NOT NULL
+  GROUP BY s.token_address
+  ORDER BY scan_count DESC
+  LIMIT ?
+`);
+
+const getMostNotoriousStmt = db.prepare(`
+  SELECT d.deployer_wallet,
+         COUNT(*) as token_count,
+         SUM(CASE WHEN d.alive = 0 THEN 1 ELSE 0 END) as dead_count,
+         ROUND(CAST(SUM(CASE WHEN d.alive = 0 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100, 1) as rug_rate,
+         MAX(d.last_checked) as last_seen
+  FROM deployer_cache d
+  GROUP BY d.deployer_wallet
+  HAVING token_count >= 5
+  ORDER BY rug_rate DESC, token_count DESC
+  LIMIT ?
+`);
+
+export interface MostScannedEntry {
+  token_address: string;
+  scan_count: number;
+  verdict: string | null;
+  score: number | null;
+  token_name: string | null;
+  token_symbol: string | null;
+}
+
+export interface MostNotoriousEntry {
+  deployer_wallet: string;
+  token_count: number;
+  dead_count: number;
+  rug_rate: number;
+  last_seen: string | null;
+}
+
+export function getMostScanned(limit: number = 20): MostScannedEntry[] {
+  return getMostScannedStmt.all(limit) as MostScannedEntry[];
+}
+
+export function getMostNotorious(limit: number = 20): MostNotoriousEntry[] {
+  return getMostNotoriousStmt.all(limit) as MostNotoriousEntry[];
+}
+
 // Public API
 
 export interface WalletUsage {

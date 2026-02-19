@@ -29,6 +29,9 @@ import {
   Lock,
   Unlock,
   DollarSign,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 // ---------- Gradient ----------
@@ -170,57 +173,115 @@ function ScoreBreakdownCard({ breakdown }) {
   );
 }
 
-// ---------- Payment Prompt ----------
+// ---------- Guest Limit Banner (inline) ----------
 
-function PaymentPrompt({ paymentInfo, onPay, paying }) {
-  if (!paymentInfo) return null;
-
-  if (paymentInfo.guestLimitReached) {
-    return (
-      <div className="text-center py-10">
-        <Wallet className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-white mb-2">Guest scan limit reached</h3>
-        <p className="text-slate-400 text-sm mb-6">
-          Connect your wallet for 3 free scans per day.
-        </p>
-        <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-base !h-12 !px-8 hover:!bg-amber-400 mx-auto" />
-        <p className="text-xs text-slate-600 mt-4">
-          Signature-based auth. No transactions, no funds at risk.
-        </p>
-      </div>
-    );
-  }
-
+function GuestLimitBanner() {
   return (
     <div className="text-center py-10">
-      <CreditCard className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
-      <h3 className="text-lg font-semibold text-white mb-2">Free scans used up</h3>
-      <p className="text-slate-400 text-sm mb-1">
-        You've used all 3 free scans for today.
-      </p>
+      <Wallet className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
+      <h3 className="text-lg font-semibold text-white mb-2">Guest scan limit reached</h3>
       <p className="text-slate-400 text-sm mb-6">
-        Pay <span className="text-amber-400 font-semibold">${paymentInfo.priceUsd} USDC</span> on Solana for an extra scan.
+        Connect your wallet for 3 free scans per day.
       </p>
-      <button
-        onClick={onPay}
-        disabled={paying}
-        className="inline-flex items-center gap-2 px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50"
-      >
-        {paying ? (
-          <>
-            <Loader2 size={18} className="animate-spin" />
-            Processing payment...
-          </>
-        ) : (
-          <>
-            <CreditCard size={18} />
-            Pay ${paymentInfo.priceUsd} USDC & Scan
-          </>
-        )}
-      </button>
+      <WalletMultiButton className="!bg-amber-500 !text-slate-900 !font-semibold !rounded-lg !text-base !h-12 !px-8 hover:!bg-amber-400 mx-auto" />
       <p className="text-xs text-slate-600 mt-4">
-        Payment via x402 protocol. USDC on Solana mainnet.
+        Signature-based auth. No transactions, no funds at risk.
       </p>
+    </div>
+  );
+}
+
+// ---------- Upgrade Modal (overlay) ----------
+
+function UpgradeModal({ paymentInfo, onPay, paying, onClose }) {
+  if (!paymentInfo) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+        >
+          <XCircle size={20} />
+        </button>
+        <CreditCard className="w-12 h-12 text-amber-400/60 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-white text-center mb-2">Free scans used up</h3>
+        <p className="text-slate-400 text-sm text-center mb-1">
+          You&apos;ve used all 3 free scans for today.
+        </p>
+        <p className="text-slate-400 text-sm text-center mb-6">
+          Pay <span className="text-amber-400 font-semibold">${paymentInfo.priceUsd} USDC</span> on Solana for an extra scan.
+        </p>
+        <button
+          onClick={onPay}
+          disabled={paying}
+          className="w-full inline-flex items-center justify-center gap-2 px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors disabled:opacity-50"
+        >
+          {paying ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Processing payment...
+            </>
+          ) : (
+            <>
+              <CreditCard size={18} />
+              Pay ${paymentInfo.priceUsd} USDC & Scan
+            </>
+          )}
+        </button>
+        <p className="text-xs text-slate-600 mt-4 text-center">
+          Payment via x402 protocol. USDC on Solana mainnet.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Share Row ----------
+
+function ShareRow({ result, address }) {
+  const [copied, setCopied] = useState(false);
+
+  const scanUrl = `https://www.daybreakscan.com/scan/${address}`;
+  const symbol = result?.token?.symbol || '';
+  const dead = result?.deployer?.tokens_dead ?? 0;
+  const total = result?.deployer?.tokens_created ?? 0;
+  const verdict = result?.verdict || '';
+  const deathRate = result?.deployer?.death_rate ?? result?.deployer?.rug_rate ?? 0;
+
+  const tweetText = `Just scanned $${symbol} deployer on @DaybreakScan — ${dead} of ${total} tokens dead (${(deathRate * 100).toFixed(0)}%). ${verdict.replace('_', ' ')} verdict.`;
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(scanUrl)}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(scanUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <a
+        href={tweetUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-white transition-colors"
+      >
+        <Share2 size={14} />
+        Share on X
+      </a>
+      <button
+        onClick={handleCopy}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-white transition-colors"
+      >
+        {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+        {copied ? 'Copied!' : 'Copy Link'}
+      </button>
     </div>
   );
 }
@@ -572,11 +633,16 @@ export default function ScannerClient({ initialAddress }) {
             </div>
           )}
 
-          {paymentInfo && !scanning && !result && (
-            <PaymentPrompt
+          {paymentInfo && !scanning && !result && paymentInfo.guestLimitReached && (
+            <GuestLimitBanner />
+          )}
+
+          {paymentInfo && !scanning && !result && !paymentInfo.guestLimitReached && (
+            <UpgradeModal
               paymentInfo={paymentInfo}
               onPay={handlePayAndScan}
               paying={paying}
+              onClose={() => setPaymentInfo(null)}
             />
           )}
 
@@ -1056,6 +1122,9 @@ export default function ScannerClient({ initialAddress }) {
                   </div>
                 </div>
               </div>
+
+              {/* Share */}
+              <ShareRow result={result} address={initialAddress || query} />
 
               {/* Verdict */}
               <div className={`p-6 rounded-xl border ${
