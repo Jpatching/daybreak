@@ -19,7 +19,7 @@ import { closeBrowser } from './services/reportcard';
 import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigrations, getPumpPortalStatus } from './services/pumpportal';
 
 // Import db to trigger SQLite init + admin seeding on startup
-import { getStats } from './services/db';
+import { getStats, getRecentScans } from './services/db';
 
 export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -79,6 +79,12 @@ app.use('/api/v1/guest/wallet', guestRateLimit, walletRouter);
 app.get('/api/v1/stats', (_req, res) => {
   const stats = getStats();
   res.json(stats);
+});
+
+// Recent scans endpoint (social proof feed)
+app.get('/api/v1/recent', (_req, res) => {
+  const recent = getRecentScans(5);
+  res.json(recent);
 });
 
 // Free tier: wallet auth + rate limit (frontend users)

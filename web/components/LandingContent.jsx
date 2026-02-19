@@ -6,7 +6,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { fetchStats } from '@/lib/api';
+import { fetchStats, fetchRecentScans } from '@/lib/api';
 import {
   Shield,
   Search,
@@ -14,8 +14,6 @@ import {
   Globe,
   Lock,
   Zap,
-  ChevronLeft,
-  ChevronRight,
   Terminal,
   AlertTriangle,
   CheckCircle2,
@@ -36,6 +34,7 @@ import {
   Users,
   Wallet,
   Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { SiSolana } from '@icons-pack/react-simple-icons';
 
@@ -83,268 +82,116 @@ const gradientTextStyleHero = {
   filter: 'drop-shadow(0 0 20px rgba(245, 158, 11, 0.5))',
 };
 
-// ---------- Data ----------
+// ---------- Helper ----------
 
-const stats = [
-  { value: 'SOL', label: 'Solana', icon: Globe },
-  { icon: Skull, label: 'Rug Detection' },
-  { value: '0-100', label: 'Rep Score', icon: BarChart2 },
-  { icon: Users, label: 'Cluster Analysis' },
-  { icon: Shield, label: 'Deployer History' },
-  { icon: Github, label: 'Open Source' },
-  { icon: TrendingUp, label: 'Live Data' },
-  { icon: Scale, label: 'Rate Limits' },
-  { icon: Eye, label: 'Funding Trace' },
-  { icon: Layers, label: 'Token Discovery' },
-  { icon: Target, label: 'Pump.fun' },
-  { icon: Database, label: 'DexScreener' },
-  { icon: Wallet, label: 'Wallet Connect' },
-  { icon: Rocket, label: 'Real-Time' },
-];
+function truncAddr(addr) {
+  if (!addr) return '...';
+  return addr.slice(0, 4) + '...' + addr.slice(-4);
+}
 
-const advancedFeatures = [
-  { icon: Shield, title: 'Reputation Score', desc: 'Composite 0-100 score across rug rate, token count, lifespan, and cluster size.', color: 'amber' },
-  { icon: Skull, title: 'Rug Detection', desc: 'Dead token identification via liquidity analysis. Automatic rug rate calculation.', color: 'red' },
-  { icon: Users, title: 'Cluster Analysis', desc: 'Traces funding source, finds linked deployers, detects rug networks.', color: 'purple' },
-  { icon: Eye, title: 'Funding Trace', desc: 'Tracks earliest SOL transfer to deployer wallet. Identifies cluster funder.', color: 'blue' },
-  { icon: Target, title: 'Pump.fun Detection', desc: 'Identifies Pump.fun token creations from on-chain transaction history.', color: 'green' },
-  { icon: TrendingUp, title: 'Live Liquidity', desc: 'Real-time token status via DexScreener. Alive/dead classification.', color: 'cyan' },
-  { icon: BarChart2, title: 'Verdict System', desc: 'CLEAN / SUSPICIOUS / SERIAL_RUGGER based on rug rate thresholds.', color: 'yellow' },
-  { icon: Activity, title: 'Token History', desc: 'Full deployer token list with creation dates, liquidity, and status.', color: 'orange' },
-  { icon: Database, title: 'Helius + DexScreener', desc: 'Enhanced API integration for fast, efficient on-chain data retrieval.', color: 'emerald' },
-  { icon: Wallet, title: 'Wallet Auth', desc: 'Connect Phantom or Solflare. Signature-based authentication.', color: 'purple' },
-  { icon: Link2, title: 'API Access', desc: 'REST API at api.daybreakscan.com. Auth-protected scan endpoints.', color: 'amber' },
-  { icon: Lock, title: 'Rate Protected', desc: 'Per-wallet rate limiting. 10 scans/hour to protect Helius credits.', color: 'red' },
-  { icon: Zap, title: 'Fast Scans', desc: 'Enhanced API-first strategy. Most scans complete in 5-15 seconds.', color: 'cyan' },
-  { icon: Globe, title: 'Solana Native', desc: 'Built specifically for Solana. No EVM, no bridges, pure on-chain data.', color: 'blue' },
-  { icon: Cpu, title: 'Caching', desc: 'Metadata and DexScreener caches reduce API calls by 30-60%.', color: 'green' },
-  { icon: Bot, title: 'Twitter Bot', desc: 'Coming soon: automated deployer scans posted to @DaybreakScan.', color: 'pink' },
-];
+// ---------- Recent Scans Feed ----------
 
-// ---------- Sections ----------
+function RecentScansFeed() {
+  const [scans, setScans] = useState([]);
+  const router = useRouter();
 
-function MarketsSection() {
-  const [marketSlide, setMarketSlide] = useState(0);
+  useEffect(() => {
+    fetchRecentScans().then(data => { if (data?.length) setScans(data); }).catch(() => {});
+  }, []);
 
-  const verdicts = [
-    { name: 'CLEAN', icon: CheckCircle2, status: 'Score 70-100', detail: 'Safe deployer', color: 'green' },
-    { name: 'SUSPICIOUS', icon: AlertTriangle, status: 'Score 30-70', detail: 'Moderate risk', color: 'yellow' },
-    { name: 'SERIAL RUGGER', icon: XCircle, status: 'Score 0-30', detail: '>70% rug rate', color: 'red' },
-    { name: 'Rug Rate', icon: Skull, status: 'Key Metric', detail: 'Dead / Total tokens', color: 'amber' },
-  ];
+  if (scans.length === 0) return null;
 
-  const signals = [
-    { name: 'Token Count', icon: Layers, status: 'Deployer stat' },
-    { name: 'Tokens Dead', icon: XCircle, status: 'Liveness check' },
-    { name: 'Funding Source', icon: Wallet, status: 'First SOL in' },
-    { name: 'Cluster Size', icon: Users, status: 'Linked wallets' },
-    { name: 'Rug Rate', icon: BarChart2, status: 'Dead / total' },
-    { name: 'Liquidity', icon: TrendingUp, status: 'DexScreener' },
-    { name: 'First Seen', icon: Eye, status: 'Oldest tx' },
-    { name: 'Rep Score', icon: Shield, status: '0-100 composite' },
-  ];
-
-  const dataSources = [
-    { name: 'Helius', icon: Zap, status: 'RPC + Enhanced' },
-    { name: 'DexScreener', icon: TrendingUp, status: 'Liquidity data' },
-    { name: 'Pump.fun', icon: Rocket, status: 'Token detection' },
-    { name: 'Solana', icon: SiSolana, status: 'On-chain', isSi: true },
-  ];
-
-  const slides = [
-    { title: 'Verdicts', subtitle: 'Three-tier deployer classification', markets: verdicts, isVerdictSlide: true },
-    { title: 'Detection Signals', subtitle: 'Data points analyzed per scan', markets: signals },
-    { title: 'Data Sources', subtitle: 'Where we get the data', markets: dataSources },
-  ];
-
-  const currentSlide = slides[marketSlide];
+  const verdictConfig = {
+    CLEAN: { color: 'text-green-400', bg: 'bg-green-500/10', dot: 'bg-green-400', icon: CheckCircle2 },
+    SUSPICIOUS: { color: 'text-yellow-400', bg: 'bg-yellow-500/10', dot: 'bg-yellow-400', icon: AlertTriangle },
+    SERIAL_RUGGER: { color: 'text-red-400', bg: 'bg-red-500/10', dot: 'bg-red-400', icon: Skull },
+  };
 
   return (
-    <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
-          Analyze any deployer
-        </h2>
-        <p className="text-slate-400 text-center mb-4">{currentSlide.subtitle}</p>
-
-        <div className="flex justify-center gap-2 mb-8">
-          {slides.map((slide, idx) => (
+    <div className="mt-8">
+      <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">Recently Scanned</p>
+      <div className="space-y-2">
+        {scans.slice(0, 4).map((scan, i) => {
+          const v = verdictConfig[scan.verdict] || verdictConfig.SUSPICIOUS;
+          const Icon = v.icon;
+          return (
             <button
-              key={idx}
-              onClick={() => setMarketSlide(idx)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                idx === marketSlide ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
+              key={`${scan.token_address}-${i}`}
+              onClick={() => router.push(`/scan/${scan.token_address}`)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-700/50 hover:border-amber-500/30 transition-all text-left ${v.bg}`}
             >
-              {slide.title}
+              <Icon size={16} className={v.color} />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-white font-medium">
+                  {scan.token_name || scan.token_symbol || truncAddr(scan.token_address)}
+                </span>
+                <span className="text-xs text-slate-500 ml-2 font-mono">
+                  {truncAddr(scan.token_address)}
+                </span>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <span className={`text-sm font-bold font-mono ${v.color}`}>{scan.score}/100</span>
+                <span className={`block text-[10px] uppercase tracking-wider ${v.color}`}>
+                  {scan.verdict.replace('_', ' ')}
+                </span>
+              </div>
             </button>
-          ))}
-        </div>
-
-        <div className="relative">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {currentSlide.markets.map((market) => {
-              const Icon = market.icon;
-              return (
-                <div
-                  key={market.name}
-                  className="flex flex-col items-center gap-2 p-5 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
-                >
-                  {market.isSi ? (
-                    <Icon size={36} className="text-[#9945FF]" />
-                  ) : (
-                    <Icon size={36} className={
-                      market.color === 'green' ? 'text-green-400'
-                        : market.color === 'red' ? 'text-red-400'
-                        : market.color === 'yellow' ? 'text-yellow-400'
-                        : 'text-amber-400'
-                    } />
-                  )}
-                  <span className="text-white font-medium">{market.name}</span>
-                  <span className={`text-xs ${
-                    market.color === 'green' || market.status === 'Deployer stat'
-                      ? 'text-green-400'
-                      : market.color === 'red' ? 'text-red-400'
-                      : market.color === 'yellow' ? 'text-yellow-400'
-                      : 'text-amber-400'
-                  }`}>{market.status}</span>
-                  {market.detail && <span className="text-xs text-slate-500">{market.detail}</span>}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="absolute top-1/2 -translate-y-1/2 -left-12 hidden md:block">
-            <button
-              onClick={() => setMarketSlide((p) => (p === 0 ? slides.length - 1 : p - 1))}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-400/50 transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
-          </div>
-          <div className="absolute top-1/2 -translate-y-1/2 -right-12 hidden md:block">
-            <button
-              onClick={() => setMarketSlide((p) => (p === slides.length - 1 ? 0 : p + 1))}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-400/50 transition-colors"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex justify-center gap-2 mt-6">
-          {slides.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setMarketSlide(idx)}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                idx === marketSlide ? 'bg-amber-400' : 'bg-slate-600 hover:bg-slate-500'
-              }`}
-            />
-          ))}
-        </div>
+          );
+        })}
       </div>
-    </section>
+    </div>
   );
 }
 
-function AdvancedFeaturesSection() {
-  const [currentPage, setCurrentPage] = useState(0);
-  const itemsPerPage = 4;
-  const totalPages = Math.ceil(advancedFeatures.length / itemsPerPage);
+// ---------- Live Stats ----------
 
-  const colorMap = {
-    amber: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
-    green: 'text-green-400 bg-green-400/10 border-green-400/30',
-    purple: 'text-purple-400 bg-purple-400/10 border-purple-400/30',
-    red: 'text-red-400 bg-red-400/10 border-red-400/30',
-    yellow: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
-    blue: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
-    pink: 'text-pink-400 bg-pink-400/10 border-pink-400/30',
-    orange: 'text-orange-400 bg-orange-400/10 border-orange-400/30',
-    cyan: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/30',
-    emerald: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
-  };
+function LiveStats() {
+  const [liveStats, setLiveStats] = useState(null);
 
-  const currentFeatures = advancedFeatures.slice(
-    currentPage * itemsPerPage,
-    (currentPage + 1) * itemsPerPage
-  );
+  useEffect(() => {
+    fetchStats().then(data => { if (data) setLiveStats(data); }).catch(() => {});
+  }, []);
+
+  if (!liveStats || liveStats.total_scans === 0) return null;
+
+  const fmt = (n) => new Intl.NumberFormat().format(n);
 
   return (
-    <section className="py-20 px-6 relative z-10">
-      <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
-          Deep Analysis Features
-        </h2>
-        <p className="text-slate-400 text-center mb-10">
-          Professional-grade deployer intelligence.
-        </p>
-
-        <div className="relative">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {currentFeatures.map((feature) => {
-              const Icon = feature.icon;
-              return (
-                <div
-                  key={feature.title}
-                  className={`p-5 rounded-xl border transition-all hover:scale-105 ${colorMap[feature.color]}`}
-                >
-                  <Icon size={28} className="mb-3" />
-                  <h3 className="text-sm font-semibold text-white mb-2">{feature.title}</h3>
-                  <p className="text-xs text-slate-400">{feature.desc}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-400/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <div className="flex gap-2">
-              {Array.from({ length: totalPages }).map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentPage(idx)}
-                  className={`w-2 h-2 rounded-full transition-colors ${
-                    idx === currentPage ? 'bg-amber-400' : 'bg-slate-600 hover:bg-slate-500'
-                  }`}
-                />
-              ))}
-            </div>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage === totalPages - 1}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-400/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-        </div>
+    <div className="flex flex-wrap justify-center gap-6 mt-8">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-amber-400">{fmt(liveStats.total_scans)}</div>
+        <div className="text-xs text-slate-500">Scans Completed</div>
       </div>
-    </section>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-green-400">{fmt(liveStats.verdicts.CLEAN)}</div>
+        <div className="text-xs text-slate-500">Clean</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-yellow-400">{fmt(liveStats.verdicts.SUSPICIOUS)}</div>
+        <div className="text-xs text-slate-500">Suspicious</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-red-400">{fmt(liveStats.verdicts.SERIAL_RUGGER)}</div>
+        <div className="text-xs text-slate-500">Serial Ruggers</div>
+      </div>
+    </div>
   );
 }
 
 // ---------- Spotlight Bento Grid ----------
 
 const bentoFeatures = [
-  { tag: '0-100', title: 'Reputation Score', desc: 'Composite score across rug rate, token count, average lifespan, and cluster connections.', color: 'amber', hero: true },
-  { tag: 'RUG', title: 'Rug Detection', desc: 'Automatic dead token identification via DexScreener liquidity checks. Calculates rug rate.', color: 'red', hero: true },
-  { tag: 'FUND', title: 'Funding Trace', desc: 'Tracks earliest incoming SOL to deployer wallet. Identifies the funding source.', color: 'blue' },
-  { tag: 'NET', title: 'Cluster Analysis', desc: 'Scans funder outgoing transfers. Finds linked deployers and rug networks.', color: 'purple' },
+  { tag: '0-100', title: 'Reputation Score', desc: 'Bayesian composite score across rug rate, token count, average lifespan, and cluster connections.', color: 'amber', hero: true },
+  { tag: 'RUG', title: 'Rug Detection', desc: 'Automatic dead token identification via DexScreener liquidity checks. Calculates deployer death rate.', color: 'red', hero: true },
+  { tag: 'FUND', title: 'Funding Trace', desc: 'Tracks earliest incoming SOL to deployer wallet. Identifies the funding source and CEX origins.', color: 'blue' },
+  { tag: 'NET', title: 'Cluster Analysis', desc: 'Scans funder outgoing transfers. Finds linked deployers and coordinated rug networks.', color: 'purple' },
   { tag: 'PF', title: 'Pump.fun Detection', desc: 'Identifies Pump.fun token creations from enhanced transaction history.', color: 'green' },
-  { tag: 'LIVE', title: 'Live Scanning', desc: 'Real-time deployer analysis. Connect wallet, paste address, get results.', color: 'cyan', hero: true },
-  { tag: 'SOL', title: 'Solana Native', desc: 'Built specifically for Solana. Helius Enhanced API + DexScreener integration.', color: 'emerald' },
-  { tag: 'AUTH', title: 'Wallet Auth', desc: 'Phantom or Solflare. Sign a message to authenticate. No seed phrases.', color: 'orange' },
-  { tag: 'API', title: 'REST API', desc: 'api.daybreakscan.com. Protected endpoints for token and wallet scanning.', color: 'yellow' },
-  { tag: '10/h', title: 'Rate Limits', desc: 'Per-wallet rate limiting to protect Helius API credits from abuse.', color: 'pink' },
-  { tag: 'DSX', title: 'DexScreener', desc: 'Bulk token liveness checks. Liquidity and volume data for verdict accuracy.', color: 'emerald' },
+  { tag: 'LIVE', title: 'Live Scanning', desc: 'Real-time deployer analysis. Connect wallet, paste address, get results in seconds.', color: 'cyan', hero: true },
+  { tag: 'RISK', title: 'Token Risk Signals', desc: 'Mint/freeze authority, bundle detection, top holder concentration, deployer holdings.', color: 'orange' },
+  { tag: 'MCP', title: 'MCP Server', desc: 'Stdio JSON-RPC server for AI agent integration. Claude Code, Cursor, Windsurf compatible.', color: 'yellow' },
+  { tag: 'API', title: 'REST API', desc: 'api.daybreakscan.com. Auth-protected endpoints for deployer and wallet scanning.', color: 'emerald' },
+  { tag: 'x402', title: 'Pay-Per-Scan', desc: '$0.01 USDC per scan via x402 protocol. No subscription, no signup required.', color: 'purple' },
+  { tag: 'MIT', title: 'Open Source', desc: 'Full source code on GitHub. MIT licensed. Verify every line of the scoring algorithm.', color: 'pink' },
 ];
 
 const bentoIconColors = {
@@ -397,7 +244,7 @@ function BentoFeaturesSection() {
     <section ref={sectionRef} className="py-20 px-6 relative z-10">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
-          Everything you need to stay safe
+          What DaybreakScan Analyzes
         </h2>
         <p className="text-slate-400 text-center mb-12">
           Complete deployer intelligence for Solana token analysis.
@@ -439,38 +286,52 @@ function BentoFeaturesSection() {
   );
 }
 
-// ---------- Live Stats ----------
+// ---------- Verdicts Section ----------
 
-function LiveStats() {
-  const [liveStats, setLiveStats] = useState(null);
-
-  useEffect(() => {
-    fetchStats().then(data => { if (data) setLiveStats(data); }).catch(() => {});
-  }, []);
-
-  if (!liveStats || liveStats.total_scans === 0) return null;
-
-  const fmt = (n) => new Intl.NumberFormat().format(n);
+function VerdictsSection() {
+  const verdicts = [
+    { name: 'CLEAN', icon: CheckCircle2, status: 'Score 70-100', detail: 'Safe deployer', color: 'green' },
+    { name: 'SUSPICIOUS', icon: AlertTriangle, status: 'Score 30-70', detail: 'Moderate risk', color: 'yellow' },
+    { name: 'SERIAL RUGGER', icon: XCircle, status: 'Score 0-30', detail: '>70% rug rate', color: 'red' },
+    { name: 'Rug Rate', icon: Skull, status: 'Key Metric', detail: 'Dead / Total tokens', color: 'amber' },
+  ];
 
   return (
-    <div className="flex flex-wrap justify-center gap-6 mt-8">
-      <div className="text-center">
-        <div className="text-2xl font-bold text-amber-400">{fmt(liveStats.total_scans)}</div>
-        <div className="text-xs text-slate-500">Scans Completed</div>
+    <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+          Three-Tier Verdict System
+        </h2>
+        <p className="text-slate-400 text-center mb-8">Every deployer gets a score and a verdict.</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {verdicts.map((v) => {
+            const Icon = v.icon;
+            return (
+              <div
+                key={v.name}
+                className="flex flex-col items-center gap-2 p-5 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
+              >
+                <Icon size={36} className={
+                  v.color === 'green' ? 'text-green-400'
+                    : v.color === 'red' ? 'text-red-400'
+                    : v.color === 'yellow' ? 'text-yellow-400'
+                    : 'text-amber-400'
+                } />
+                <span className="text-white font-medium">{v.name}</span>
+                <span className={`text-xs ${
+                  v.color === 'green' ? 'text-green-400'
+                    : v.color === 'red' ? 'text-red-400'
+                    : v.color === 'yellow' ? 'text-yellow-400'
+                    : 'text-amber-400'
+                }`}>{v.status}</span>
+                {v.detail && <span className="text-xs text-slate-500">{v.detail}</span>}
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div className="text-center">
-        <div className="text-2xl font-bold text-green-400">{fmt(liveStats.verdicts.CLEAN)}</div>
-        <div className="text-xs text-slate-500">Clean</div>
-      </div>
-      <div className="text-center">
-        <div className="text-2xl font-bold text-yellow-400">{fmt(liveStats.verdicts.SUSPICIOUS)}</div>
-        <div className="text-xs text-slate-500">Suspicious</div>
-      </div>
-      <div className="text-center">
-        <div className="text-2xl font-bold text-red-400">{fmt(liveStats.verdicts.SERIAL_RUGGER)}</div>
-        <div className="text-xs text-slate-500">Serial Ruggers</div>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -500,14 +361,14 @@ export default function LandingContent() {
                 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight"
                 style={gradientTextStyleHero}
               >
-                Check Any Deployer<br />Before You Ape
+                Check Any Deployer<br />Before You Trade
               </h1>
               <p className="text-xl text-slate-300 mb-8" style={{ textShadow: '0 0 10px rgba(245, 158, 11, 0.3)' }}>
-                Deployer reputation scoring. Rug detection. On{' '}
-                <span className="text-amber-400 font-semibold">Solana</span>.
+                Find out if the deployer has rugged before.{' '}
+                <span className="text-amber-400 font-semibold">Free for 3 scans/day.</span>
               </p>
 
-              <form onSubmit={handleScan} className="flex gap-3 mb-6">
+              <form onSubmit={handleScan} className="flex gap-3 mb-4">
                 <input
                   type="text"
                   value={address}
@@ -523,7 +384,7 @@ export default function LandingContent() {
                 </button>
               </form>
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 mb-2">
                 <a
                   href="https://github.com/Jpatching/daybreak"
                   target="_blank"
@@ -538,6 +399,7 @@ export default function LandingContent() {
               </div>
 
               <LiveStats />
+              <RecentScansFeed />
             </div>
 
             {/* Right - Terminal Preview */}
@@ -582,7 +444,7 @@ export default function LandingContent() {
         </div>
       </section>
 
-      {/* Ecosystem / Branding */}
+      {/* Powered By */}
       <section className="py-10 px-6 border-y border-white/5 relative z-10 bg-slate-900/60 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto">
           <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Powered By</p>
@@ -614,43 +476,11 @@ export default function LandingContent() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="py-8 border-y border-white/5 overflow-hidden relative z-10 bg-slate-900/60 backdrop-blur-sm">
-        <div
-          className="flex gap-16 animate-scroll-stats"
-          style={{ width: 'max-content' }}
-        >
-          {[...stats, ...stats].map((stat, idx) => {
-            const Icon = stat.icon;
-            return (
-              <div key={`stat-${idx}`} className="text-center flex-shrink-0">
-                <div className="text-3xl md:text-4xl font-bold text-amber-400 flex justify-center">
-                  {stat.value ? stat.value : <Icon size={36} strokeWidth={1.5} />}
-                </div>
-                <div className="text-slate-400 text-sm mt-1">{stat.label}</div>
-              </div>
-            );
-          })}
-        </div>
-        <style>{`
-          @keyframes scroll-stats {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-25%); }
-          }
-          .animate-scroll-stats {
-            animation: scroll-stats 20s linear infinite;
-          }
-        `}</style>
-      </section>
-
-      {/* Features - Spotlight Bento Grid */}
+      {/* Features - Bento Grid */}
       <BentoFeaturesSection />
 
-      {/* Markets / Analysis */}
-      <MarketsSection />
-
-      {/* Advanced Features */}
-      <AdvancedFeaturesSection />
+      {/* Verdicts */}
+      <VerdictsSection />
 
       {/* FAQ */}
       <section className="py-20 px-6 relative z-10">
@@ -659,22 +489,22 @@ export default function LandingContent() {
             FAQ
           </h2>
           <p className="text-slate-400 text-center mb-10">
-            Common questions about Daybreak.
+            Common questions about DaybreakScan.
           </p>
 
           <div className="space-y-4">
             {[
               {
-                q: 'What does Daybreak do?',
-                a: 'Daybreak scans any Solana token address and analyzes the deployer\'s on-chain history. It calculates a reputation score based on how many tokens they\'ve created, how many are dead (rugged), and their funding network.',
+                q: 'What does DaybreakScan do?',
+                a: 'DaybreakScan scans any Solana token address and analyzes the deployer\'s on-chain history. It calculates a reputation score based on how many tokens they\'ve created, how many are dead (rugged), and their funding network.',
               },
               {
                 q: 'How does rug detection work?',
-                a: 'We check each of the deployer\'s tokens against DexScreener for liquidity. Tokens with less than $100 liquidity and no 24h volume are classified as dead. The rug rate is dead tokens / total tokens.',
+                a: 'We check each of the deployer\'s tokens against DexScreener for liquidity. Tokens with less than $100 liquidity and no 24h volume are classified as dead. The death rate is dead tokens / total tokens.',
               },
               {
                 q: 'What is a reputation score?',
-                a: 'A 0-100 composite score. It weighs rug rate (40%), token count penalty (20%), average token lifespan (20%), and cluster connections (20%). Higher is better: 70+ is CLEAN, below 30 is SERIAL_RUGGER.',
+                a: 'A Bayesian 0-100 composite score. It weighs death rate (40%), token count penalty (20%), average token lifespan (20%), and cluster connections (20%). Additional penalties for active mint/freeze authority, bundled launches, and concentrated holdings. Higher is better: 70+ is CLEAN, below 30 is SERIAL_RUGGER.',
               },
               {
                 q: 'What is cluster analysis?',
@@ -682,15 +512,15 @@ export default function LandingContent() {
               },
               {
                 q: 'Why do I need to connect my wallet?',
-                a: 'Wallet authentication protects our Helius API credits. Each scan costs 50-100 API calls. You sign a message to prove wallet ownership \u2014 no transactions, no seed phrases, no funds at risk.',
+                a: 'Wallet authentication protects our Helius API credits. Each scan costs 50-100 API calls. You sign a message to prove wallet ownership \u2014 no transactions, no seed phrases, no funds at risk. You get 1 free scan without connecting, or 3/day with a wallet.',
               },
               {
-                q: 'Is there a rate limit?',
-                a: 'Yes, 10 scans per hour per wallet. This prevents abuse while allowing plenty of scans for normal use.',
+                q: 'What are the scan limits?',
+                a: '1 free scan without a wallet. Connect your Solana wallet for 3 free scans per day. Need more? Pay $0.01 USDC per scan via x402 protocol \u2014 no subscription, no signup.',
               },
               {
-                q: 'Is Daybreak open source?',
-                a: 'Yes. MIT license. The full backend, frontend, and Rust CLI are on GitHub.',
+                q: 'Is DaybreakScan open source?',
+                a: 'Yes. MIT license. The full backend, frontend, and MCP server are on GitHub. Verify every line of the scoring algorithm yourself.',
               },
             ].map((faq, idx) => (
               <div key={idx} className="p-5 bg-slate-800/50 rounded-xl border border-slate-700">
@@ -709,15 +539,15 @@ export default function LandingContent() {
       <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
-            Ready to scan?
+            The next token you almost ape into
           </h2>
-          <p className="text-slate-400 mb-8">
-            Daybreak is free, open source, and built for Solana.
+          <p className="text-xl text-slate-300 mb-8">
+            Check the deployer first.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/scan"
-              className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors"
+              className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors text-lg"
             >
               Launch Scanner
             </Link>
@@ -730,6 +560,9 @@ export default function LandingContent() {
               Star on GitHub
             </a>
           </div>
+          <p className="text-xs text-slate-600 mt-6">
+            Free, open source, built for Solana. MIT licensed.
+          </p>
         </div>
       </section>
     </div>

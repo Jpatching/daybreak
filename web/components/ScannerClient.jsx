@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '@/hooks/useAuth';
-import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, PaymentRequiredError } from '@/lib/api';
+import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, fetchRecentScans, PaymentRequiredError } from '@/lib/api';
 import {
   Search,
   CheckCircle2,
@@ -85,18 +85,21 @@ function VerdictBadge({ verdict }) {
 
 function UsageBadge({ usage }) {
   if (!usage) return null;
-  const pct = (usage.scans_used / usage.scans_limit) * 100;
-  const barColor = usage.scans_remaining <= 2 ? 'bg-red-500' : usage.scans_remaining <= 5 ? 'bg-yellow-500' : 'bg-amber-500';
+  const limit = Math.min(usage.scans_limit, 10); // cap display at reasonable number
+  const used = Math.min(usage.scans_used, limit);
+  const remaining = Math.max(0, limit - used);
+  const pct = (used / limit) * 100;
+  const barColor = remaining === 0 ? 'bg-red-500' : remaining <= 1 ? 'bg-yellow-500' : 'bg-amber-500';
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/80 rounded-lg border border-slate-700">
       <Clock size={14} className="text-slate-500 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="text-slate-400">
-            {usage.scans_used}/{usage.scans_limit} free scans used today
+            {used}/{limit} free scans used today
           </span>
-          <span className={usage.scans_remaining <= 2 ? 'text-red-400 font-semibold' : 'text-slate-500'}>
-            {usage.scans_remaining} remaining
+          <span className={remaining === 0 ? 'text-red-400 font-semibold' : 'text-slate-500'}>
+            {remaining} remaining
           </span>
         </div>
         <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -248,6 +251,75 @@ const SCAN_STEPS = [
   'Analyzing funding cluster...',
   'Calculating reputation...',
 ];
+
+// ---------- Idle State (recent scans feed) ----------
+
+function ScannerIdleState({ connected, isAuthenticated }) {
+  const [recentScans, setRecentScans] = useState([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetchRecentScans().then(data => { if (data?.length) setRecentScans(data); }).catch(() => {});
+  }, []);
+
+  const verdictConfig = {
+    CLEAN: { color: 'text-green-400', bg: 'bg-green-500/10', icon: CheckCircle2 },
+    SUSPICIOUS: { color: 'text-yellow-400', bg: 'bg-yellow-500/10', icon: AlertTriangle },
+    SERIAL_RUGGER: { color: 'text-red-400', bg: 'bg-red-500/10', icon: Skull },
+  };
+
+  return (
+    <div className="py-8">
+      {!connected && (
+        <div className="text-center mb-8">
+          <p className="text-slate-400 mb-1">Paste a Solana token address above and click Scan</p>
+          <p className="text-xs text-slate-500">1 free scan without wallet. <span className="text-amber-400/70">Connect wallet for 3 free scans/day.</span></p>
+        </div>
+      )}
+      {connected && isAuthenticated && (
+        <div className="text-center mb-8">
+          <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
+          <p className="text-xs text-slate-500 mt-1">Works with any Pump.fun, Raydium, or PumpSwap token</p>
+        </div>
+      )}
+
+      {recentScans.length > 0 && (
+        <div>
+          <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">Recently Scanned</p>
+          <div className="space-y-2">
+            {recentScans.slice(0, 4).map((scan, i) => {
+              const v = verdictConfig[scan.verdict] || verdictConfig.SUSPICIOUS;
+              const Icon = v.icon;
+              return (
+                <button
+                  key={`${scan.token_address}-${i}`}
+                  onClick={() => router.push(`/scan/${scan.token_address}`)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-700/50 hover:border-amber-500/30 transition-all text-left ${v.bg}`}
+                >
+                  <Icon size={16} className={v.color} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-white font-medium">
+                      {scan.token_name || scan.token_symbol || truncAddr(scan.token_address)}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-2 font-mono hidden sm:inline">
+                      {truncAddr(scan.token_address)}
+                    </span>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span className={`text-sm font-bold font-mono ${v.color}`}>{scan.score}/100</span>
+                    <span className={`block text-[10px] uppercase tracking-wider ${v.color}`}>
+                      {scan.verdict.replace('_', ' ')}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------- Main ----------
 
@@ -428,7 +500,7 @@ export default function ScannerClient({ initialAddress }) {
             Deployer Reputation Scanner
           </h1>
           <p className="text-slate-400 text-center mb-6">
-            Paste a Solana token address to analyze the deployer's reputation.
+            Find out if the deployer has rugged before. Free for 3 scans/day.
           </p>
 
           {isAuthenticated && usage && (
@@ -474,20 +546,8 @@ export default function ScannerClient({ initialAddress }) {
             </div>
           )}
 
-          {!connected && !scanning && !result && !paymentInfo && !initialAddress && (
-            <div className="text-center py-16">
-              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
-              <p className="text-xs text-slate-600 mt-2">1 free scan without wallet. Connect for 3/day.</p>
-            </div>
-          )}
-
-          {isAuthenticated && !initialAddress && !scanning && !result && !paymentInfo && (
-            <div className="text-center py-16">
-              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">Paste a Solana token address above and click Scan</p>
-              <p className="text-xs text-slate-600 mt-2">Works with any Pump.fun token</p>
-            </div>
+          {!scanning && !result && !paymentInfo && !initialAddress && (
+            <ScannerIdleState connected={connected} isAuthenticated={isAuthenticated} />
           )}
 
           {scanning && (

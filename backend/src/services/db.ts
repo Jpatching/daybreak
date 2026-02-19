@@ -182,6 +182,31 @@ export function getStats(): ScanStats {
   };
 }
 
+// Recent scans (for social proof feed)
+const getRecentScansStmt = db.prepare(`
+  SELECT s.token_address, s.verdict, s.score, s.scanned_at,
+         d.token_name, d.token_symbol
+  FROM scan_log s
+  LEFT JOIN deployer_cache d ON s.token_address = d.token_address
+  WHERE s.verdict IS NOT NULL
+  GROUP BY s.token_address
+  ORDER BY MAX(s.id) DESC
+  LIMIT ?
+`);
+
+export interface RecentScan {
+  token_address: string;
+  verdict: string;
+  score: number;
+  scanned_at: string;
+  token_name: string | null;
+  token_symbol: string | null;
+}
+
+export function getRecentScans(limit: number = 5): RecentScan[] {
+  return getRecentScansStmt.all(limit) as RecentScan[];
+}
+
 // Deployer cache table — caches token lists per deployer wallet
 db.exec(`
   CREATE TABLE IF NOT EXISTS deployer_cache (

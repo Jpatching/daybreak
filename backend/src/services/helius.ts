@@ -414,9 +414,13 @@ export async function analyzeCluster(
   funderWallet: string,
   excludeWallet: string
 ): Promise<{ fundedWallets: string[]; deployerCount: number; fromCex: boolean; cexName: string | null }> {
-  // CEX detection
+  // CEX detection — skip cluster analysis for exchange wallets (they fund millions of wallets)
   const cexName = CEX_WALLETS[funderWallet] || null;
   const fromCex = cexName !== null;
+
+  if (fromCex) {
+    return { fundedWallets: [], deployerCount: 0, fromCex, cexName };
+  }
 
   const fundedWallets = new Set<string>();
 

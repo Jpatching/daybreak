@@ -81,6 +81,12 @@ export async function fetchStats() {
   return res.json();
 }
 
+export async function fetchRecentScans() {
+  const res = await fetch(`${API_BASE}/recent`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function checkHealth() {
   return apiFetch(`${API_BASE}/health`);
 }
