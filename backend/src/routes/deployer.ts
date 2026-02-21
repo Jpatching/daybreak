@@ -28,7 +28,9 @@ import {
   saveReportCard,
   upsertWalletAppearance,
   getNetworkStats,
+  incrementGuestUsage,
 } from '../services/db';
+import { incrementUsage, getUsageCount, SCANS_LIMIT } from '../services/auth';
 import { renderTwitterCard } from '../services/reportcard';
 import fs from 'fs';
 import pathModule from 'path';
@@ -170,7 +172,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
     // Always fetch fresh DexScreener data for the scanned token specifically
     try {
       const freshScannedStatus = await checkTokenStatus(token_address);
-      if (freshScannedStatus.liquidity > 0 || freshScannedStatus.priceUsd !== null) {
+      if (freshScannedStatus.pairCreatedAt !== null) {
         tokenStatuses.set(token_address, freshScannedStatus);
       }
     } catch { /* best-effort */ }
@@ -250,7 +252,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
           address: mint,
           name: sanitizeString(name),
           symbol: sanitizeString(symbol),
-          alive: null as any,
+          alive: null,
           liquidity: 0,
           price_usd: null,
           price_change_24h: null,
@@ -275,7 +277,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
-    // Deploy velocity
+    // Deploy velocity: use totalTokens (including unverified) / time span
+    // If we only have dates for a subset, extrapolate using total count
     let deployVelocity: number | null = null;
     const creationDates = tokens
       .map(t => t.created_at)
@@ -283,9 +286,10 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       .sort();
     if (creationDates.length >= 2) {
       const daySpan = (new Date(creationDates[creationDates.length - 1]).getTime() - new Date(creationDates[0]).getTime()) / 86400000;
+      // Use totalTokens (not just dated ones) for more accurate velocity
       deployVelocity = Math.round((totalTokens / Math.max(1, daySpan)) * 100) / 100;
     } else if (totalTokens >= 2) {
-      deployVelocity = totalTokens;
+      deployVelocity = totalTokens; // All deployed at roughly same time
     }
 
     // Step 6: Parallel fetch — funding, deployer SOL balance, Jupiter price, RugCheck
@@ -450,7 +454,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         name: t.name,
         symbol: t.symbol,
         created_at: t.created_at,
-        alive: t.alive ? 1 : 0,
+        alive: t.alive === null ? -1 : t.alive ? 1 : 0,
         liquidity: t.liquidity,
       }));
       // Also cache unverified tokens
@@ -550,6 +554,21 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       usage,
       scanned_at: new Date().toISOString(),
     };
+
+    // Increment usage AFTER successful scan (not in middleware)
+    if (req.wallet?.startsWith('guest:')) {
+      const ip = req.wallet.replace('guest:', '');
+      incrementGuestUsage(ip);
+    } else if (req.wallet && !req.headers['x-bot-key'] && !req.headers['x-payment']) {
+      incrementUsage(req.wallet);
+      req.scansUsed = getUsageCount(req.wallet);
+      req.scansRemaining = SCANS_LIMIT - req.scansUsed;
+      result.usage = {
+        scans_used: req.scansUsed,
+        scans_limit: req.scansLimit || SCANS_LIMIT,
+        scans_remaining: req.scansRemaining,
+      };
+    }
 
     scanCache.set(token_address, result);
 

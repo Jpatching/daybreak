@@ -227,6 +227,12 @@ function verifyPaymentSignature(payload: X402SignaturePayload, config: X402Serve
       return null;
     }
 
+    // Check replay protection: use nonce as unique identifier
+    if (isPaymentUsed(nonce)) {
+      console.error(`[x402] Nonce already used: ${nonce}`);
+      return null;
+    }
+
     const now = Math.floor(Date.now() / 1000);
     if (Math.abs(now - timestamp) > MAX_PAYMENT_AGE_SECONDS) {
       console.error(`[x402] Payment timestamp too old/future: ${timestamp} vs ${now}`);
@@ -284,6 +290,10 @@ function verifyPaymentSignature(payload: X402SignaturePayload, config: X402Serve
       return null;
     }
 
+    // Record payment to prevent replay
+    recordPayment(nonce, payer, config.priceUsd, 'x402-sig');
+
+    console.log(`[x402] Signature payment verified: nonce=${nonce} from ${payer}`);
     return payer;
   } catch (err) {
     console.error('[x402] Signature verification error:', err);

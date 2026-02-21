@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
@@ -153,12 +153,12 @@ function ScoreBreakdownCard({ breakdown }) {
             <div key={c.label}>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-slate-400">{c.label}</span>
-                <span className="text-slate-300 font-mono">{c.earned.toFixed(1)} / {c.max}</span>
+                <span className="text-slate-300 font-mono">{(c.earned ?? 0).toFixed(1)} / {c.max}</span>
               </div>
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                  style={{ width: `${(c.earned / c.max) * 100}%` }}
+                  style={{ width: `${((c.earned ?? 0) / c.max) * 100}%` }}
                 />
               </div>
             </div>
@@ -320,7 +320,9 @@ function solscanUrl(addr) {
 
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
-const TREASURY_WALLET = new PublicKey('5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2');
+const TREASURY_WALLET = new PublicKey(
+  process.env.NEXT_PUBLIC_TREASURY_WALLET || '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2'
+);
 
 const ERROR_MESSAGES = {
   AUTH_REQUIRED: 'Please connect your wallet and sign in to scan.',
@@ -422,6 +424,9 @@ export default function ScannerClient({ initialAddress }) {
   const [error, setError] = useState(null);
   const [usage, setUsage] = useState(null);
 
+  // Track which address has already been scanned to prevent double-scan
+  const scannedAddressRef = useRef(null);
+
   // x402 payment state
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [paying, setPaying] = useState(false);
@@ -450,12 +455,16 @@ export default function ScannerClient({ initialAddress }) {
     }
   }, [connected, isAuthenticated, authLoading, login]);
 
-  // Scan when initialAddress changes
+  // Scan when initialAddress changes, but wait for auth to settle if wallet is connected
   useEffect(() => {
-    if (initialAddress) {
-      doScan(initialAddress);
-    }
-  }, [initialAddress, isAuthenticated, token]);
+    if (!initialAddress) return;
+    // If wallet connected but auth still loading, wait for it to finish
+    if (connected && !isAuthenticated && authLoading) return;
+    // Don't re-scan the same address
+    if (scannedAddressRef.current === initialAddress) return;
+    scannedAddressRef.current = initialAddress;
+    doScan(initialAddress);
+  }, [initialAddress, isAuthenticated, token, connected, authLoading]);
 
   async function doScan(address) {
     setScanning(true);
@@ -1020,7 +1029,7 @@ export default function ScannerClient({ initialAddress }) {
               )}
 
               {/* Token list */}
-              {result.deployer.tokens && result.deployer.tokens.length > 0 && (
+              {(result.deployer.tokens || []).length > 0 && (
                 <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
                   <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <TrendingUp size={14} />
@@ -1062,6 +1071,7 @@ export default function ScannerClient({ initialAddress }) {
                             <td className="py-2 pr-4">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 t.alive === null ? 'bg-slate-500/20 text-slate-400'
+                                  : t.alive && t.liquidity < 100 ? 'bg-yellow-500/20 text-yellow-400'
                                   : t.alive ? 'bg-green-500/20 text-green-400'
                                   : t.death_type === 'likely_rug' ? 'bg-red-500/20 text-red-400'
                                   : t.death_type === 'distributed_rug' ? 'bg-red-500/20 text-red-400'
@@ -1070,6 +1080,8 @@ export default function ScannerClient({ initialAddress }) {
                               }`}>
                                 {t.alive === null ? (
                                   <><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Unverified</>
+                                ) : t.alive && t.liquidity < 100 ? (
+                                  <><AlertTriangle size={10} /> Low Liq</>
                                 ) : t.alive ? (
                                   <><CheckCircle2 size={10} /> Alive</>
                                 ) : t.death_type === 'likely_rug' ? (
@@ -1237,7 +1249,7 @@ export default function ScannerClient({ initialAddress }) {
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Tokens Verified</div>
                     <div className="text-lg font-semibold text-green-400">
-                      {result.confidence?.tokens_verified ?? result.deployer.tokens.length}
+                      {result.confidence?.tokens_verified ?? (result.deployer.tokens || []).length}
                     </div>
                   </div>
                   <div>

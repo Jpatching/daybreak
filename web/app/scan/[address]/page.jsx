@@ -51,7 +51,8 @@ export async function generateMetadata({ params }) {
     // Fall through to default metadata
   }
 
-  // Fallback metadata when bot API is unavailable
+  // Fallback metadata when bot API is unavailable — use generic OG image
+  // (report card PNG may not exist for unscanned tokens)
   return {
     title: `Deployer Scan: ${truncated}`,
     description: `Check this deployer's reputation on DaybreakScan — rug detection, cluster analysis, and scoring.`,
@@ -60,13 +61,13 @@ export async function generateMetadata({ params }) {
       title: `Deployer Scan: ${truncated}`,
       description: `Check this deployer's reputation on DaybreakScan.`,
       url: `/scan/${address}`,
-      images: [`https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`],
+      images: [`https://www.daybreakscan.com/og?address=${address}`],
     },
     twitter: {
       card: 'summary_large_image',
       title: `Deployer Scan: ${truncated}`,
       description: `Check this deployer's reputation on DaybreakScan.`,
-      images: [`https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`],
+      images: [`https://www.daybreakscan.com/og?address=${address}`],
     },
   };
 }

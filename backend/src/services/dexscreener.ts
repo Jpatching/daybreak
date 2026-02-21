@@ -75,13 +75,9 @@ function parsePairs(pairs: DexScreenerPair[]): {
   const marketCap = bestPair.marketCap ?? null;
   const socials = extractSocials(bestPair);
 
-  const ageHours = bestPair.pairCreatedAt
-    ? (Date.now() - bestPair.pairCreatedAt) / (1000 * 60 * 60)
-    : Infinity;
   const hasLiquidity = totalLiquidity >= ALIVE_LIQUIDITY_THRESHOLD;
   const hasVolume = totalVolume24h > 0;
-  const isNew = ageHours < 24;
-  const isAlive = hasLiquidity || hasVolume || (isNew && totalLiquidity > 0);
+  const isAlive = hasLiquidity || hasVolume;
 
   return {
     totalLiquidity, totalVolume24h, priceUsd, priceChange24h,

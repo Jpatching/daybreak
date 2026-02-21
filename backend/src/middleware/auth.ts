@@ -60,7 +60,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
-  incrementUsage(wallet);
+  // Don't increment usage here — routes increment after successful scan
+  // to avoid burning credits on upstream failures
   req.wallet = wallet;
   req.scansUsed = getUsageCount(wallet);
   req.scansRemaining = SCANS_LIMIT - req.scansUsed;
@@ -94,7 +95,7 @@ export function guestRateLimit(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  incrementGuestUsage(ip);
+  // Don't increment usage here — routes increment after successful scan
   const usage = getGuestUsage(ip);
   req.wallet = `guest:${ip}`;
   req.scansUsed = usage.scansToday;

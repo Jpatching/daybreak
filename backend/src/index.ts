@@ -20,6 +20,7 @@ import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigration
 
 // Import db to trigger SQLite init + admin seeding on startup
 import { getStats, getRecentScans, getWalletHistory, getMostScanned, getMostNotorious } from './services/db';
+import { TTLCache } from './services/cache';
 
 export const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -75,26 +76,41 @@ app.use('/api/v1/report', reportcardRouter);
 app.use('/api/v1/guest/deployer', guestRateLimit, deployerRouter);
 app.use('/api/v1/guest/wallet', guestRateLimit, walletRouter);
 
+// Cached public endpoints to reduce SQLite load on every page view
+const statsCache = new TTLCache<any>(300);       // 5 min
+const recentCache = new TTLCache<any>(60);        // 1 min
+const leaderboardCache = new TTLCache<any>(300);  // 5 min
+
 // Public stats endpoint (social proof)
 app.get('/api/v1/stats', (_req, res) => {
-  const stats = getStats();
+  let stats = statsCache.get('stats');
+  if (!stats) {
+    stats = getStats();
+    statsCache.set('stats', stats);
+  }
   res.json(stats);
 });
 
 // Recent scans endpoint (social proof feed)
 app.get('/api/v1/recent', (_req, res) => {
-  const recent = getRecentScans(5);
+  let recent = recentCache.get('recent');
+  if (!recent) {
+    recent = getRecentScans(5);
+    recentCache.set('recent', recent);
+  }
   res.json(recent);
 });
 
 // Leaderboard endpoint (public)
 app.get('/api/v1/leaderboard', (_req, res) => {
   const tab = (_req.query as any).tab || 'most_scanned';
-  if (tab === 'notorious') {
-    res.json(getMostNotorious(20));
-  } else {
-    res.json(getMostScanned(20));
+  const cacheKey = `leaderboard:${tab}`;
+  let data = leaderboardCache.get(cacheKey);
+  if (!data) {
+    data = tab === 'notorious' ? getMostNotorious(20) : getMostScanned(20);
+    leaderboardCache.set(cacheKey, data);
   }
+  res.json(data);
 });
 
 // Wallet scan history (requires auth, no rate limit count)

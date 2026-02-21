@@ -28,6 +28,12 @@ export default function sitemap() {
       priority: 0.8,
     },
     {
+      url: 'https://www.daybreakscan.com/leaderboard',
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.7,
+    },
+    {
       url: 'https://www.daybreakscan.com/docs',
       lastModified: new Date(),
       changeFrequency: 'monthly',

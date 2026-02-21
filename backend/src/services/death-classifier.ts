@@ -78,17 +78,19 @@ async function classifySingleToken(
     deployer_holdings_pct: null,
     peak_liquidity: token.liquidity,
     lifespan_hours: null,
-    had_real_buyers: token.liquidity >= 2000,
+    had_real_buyers: token.liquidity >= 500,
     initial_transfer_to: null,
     initial_transfer_is_dex: false,
     initial_transfer_is_associated: false,
   };
 
-  // Calculate lifespan
+  // Calculate age (time from creation to now — not true lifespan since we don't know exact death time)
   if (token.created_at) {
     const created = new Date(token.created_at).getTime();
     evidence.lifespan_hours = Math.round((Date.now() - created) / (1000 * 60 * 60));
   }
+  // Note: lifespan_hours is actually token age, not time-to-death.
+  // True lifespan would require knowing when liquidity was removed.
 
   // Check deployer holdings for this token
   try {
@@ -102,8 +104,8 @@ async function classifySingleToken(
         evidence.deployer_sold = holdings < 0.01; // effectively 0%
       }
     }
-  } catch {
-    // best-effort
+  } catch (err) {
+    console.error('[death-classifier] Holdings check failed:', err instanceof Error ? err.message : err);
   }
 
   // Check initial token distribution (first transfer out from deployer)
@@ -153,25 +155,30 @@ async function classifySingleToken(
       }
       if (evidence.initial_transfer_to) break;
     }
-  } catch {
-    // best-effort
+  } catch (err) {
+    console.error('[death-classifier] Distribution check failed:', err instanceof Error ? err.message : err);
   }
 
-  // Classification rules
+  // Classification rules (order matters — most specific first)
+
+  // 1. Distributed rug: tokens sent to associated wallet + deployer sold
   if (evidence.initial_transfer_is_associated && evidence.deployer_sold) {
     return { type: 'distributed_rug', evidence };
   }
 
+  // 2. Quick dump: deployer sold within 48h (catches low-liquidity pump.fun rugs)
+  if (evidence.deployer_sold && evidence.lifespan_hours !== null && evidence.lifespan_hours < 48) {
+    return { type: 'likely_rug', evidence };
+  }
+
+  // 3. Likely rug: had real buyers + deployer sold
   if (evidence.had_real_buyers && evidence.deployer_sold) {
     return { type: 'likely_rug', evidence };
   }
 
+  // 4. Natural death: no real buyers and deployer still holds
   if (!evidence.had_real_buyers && (evidence.deployer_holdings_pct === null || evidence.deployer_holdings_pct > 0)) {
     return { type: 'natural', evidence };
-  }
-
-  if (evidence.deployer_sold && evidence.lifespan_hours !== null && evidence.lifespan_hours < 48) {
-    return { type: 'likely_rug', evidence };
   }
 
   // Can't determine confidently

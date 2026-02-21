@@ -8,7 +8,7 @@ export interface DeployerToken {
   address: string;
   name: string;
   symbol: string;
-  alive: boolean;
+  alive: boolean | null;
   liquidity: number;
   price_usd: number | null;
   price_change_24h: number | null;

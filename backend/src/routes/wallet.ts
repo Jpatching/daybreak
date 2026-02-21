@@ -12,7 +12,8 @@ import {
 import { bulkCheckTokens } from '../services/dexscreener';
 import { calculateReputation } from '../services/reputation';
 import { TTLCache } from '../services/cache';
-import { logScan } from '../services/db';
+import { logScan, incrementGuestUsage } from '../services/db';
+import { incrementUsage, getUsageCount, SCANS_LIMIT } from '../services/auth';
 import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
@@ -213,6 +214,21 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       usage,
       scanned_at: new Date().toISOString(),
     };
+
+    // Increment usage AFTER successful scan (not in middleware)
+    if (req.wallet?.startsWith('guest:')) {
+      const ip = req.wallet.replace('guest:', '');
+      incrementGuestUsage(ip);
+    } else if (req.wallet && !req.headers['x-bot-key'] && !req.headers['x-payment']) {
+      incrementUsage(req.wallet);
+      req.scansUsed = getUsageCount(req.wallet);
+      req.scansRemaining = SCANS_LIMIT - req.scansUsed;
+      result.usage = {
+        scans_used: req.scansUsed,
+        scans_limit: req.scansLimit || SCANS_LIMIT,
+        scans_remaining: req.scansRemaining,
+      };
+    }
 
     walletCache.set(wallet_address, result);
 
