@@ -15,3 +15,7 @@ backend/node_modules/
 backend/dist/
 web/node_modules/
 web/dist/
+web/.next/
+web/.vercel/
+daybreak.db
+*.db

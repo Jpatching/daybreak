@@ -82,7 +82,9 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
 
       if (status.pairCreatedAt) {
         const created = new Date(status.pairCreatedAt).getTime();
-        const days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+        let days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+        // Dead tokens didn't live long — cap lifespan at 7 days to avoid inflating scores
+        if (!isAlive && days > 7) days = 7;
         totalLifespanDays += days;
         tokensWithLifespan++;
       }
@@ -119,7 +121,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       source_wallet: fundingSourceWallet,
       other_deployers_funded: 0,
       cluster_total_tokens: totalTokens,
-      cluster_total_dead: adjustedDead,
+      cluster_total_dead: deadCount,
       from_cex: false,
       cex_name: null,
       network_wallets: 0,
@@ -192,7 +194,9 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         tokens_created: totalTokens,
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
-        tokens_assumed_dead: unknownCount,
+        tokens_assumed_dead: 0,
+        confirmed_rugs: 0,
+        natural_deaths: 0,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         death_rate: Math.round(deathRate * 1000) / 1000,
         reputation_score: score,
@@ -209,6 +213,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       token_risks: null,
       market_data: null,
       rugcheck: null,
+      cross_reference: null,
       evidence,
       confidence,
       usage,

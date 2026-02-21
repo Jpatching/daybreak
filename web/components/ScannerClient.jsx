@@ -125,7 +125,7 @@ function UsageBadge({ usage }) {
 // ---------- Score Breakdown ----------
 
 function ScoreBreakdownCard({ breakdown }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   if (!breakdown) return null;
 
   const components = [
@@ -788,6 +788,69 @@ export default function ScannerClient({ initialAddress }) {
                 </div>
               </div>
 
+              {/* Verdict + Cross-Reference (moved to top) */}
+              <div className={`p-6 rounded-xl border ${
+                result.verdict === 'CLEAN' ? 'bg-green-500/5 border-green-500/20'
+                  : result.verdict === 'SUSPICIOUS' ? 'bg-yellow-500/5 border-yellow-500/20'
+                  : 'bg-red-500/5 border-red-500/20'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {result.verdict === 'CLEAN'
+                    ? <CheckCircle2 size={24} className="text-green-400 flex-shrink-0 mt-0.5" />
+                    : result.verdict === 'SUSPICIOUS'
+                    ? <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                    : <Skull size={24} className="text-red-400 flex-shrink-0 mt-0.5" />}
+                  <div className="flex-1">
+                    <h3 className={`font-semibold mb-1 ${
+                      result.verdict === 'CLEAN' ? 'text-green-400'
+                        : result.verdict === 'SUSPICIOUS' ? 'text-yellow-400'
+                        : 'text-red-400'
+                    }`}>
+                      {result.verdict === 'CLEAN' ? 'Clean Deployer'
+                        : result.verdict === 'SUSPICIOUS' ? 'Suspicious Deployer'
+                        : 'Serial Rugger Detected'}
+                    </h3>
+                    <p className="text-sm text-slate-400">
+                      {result.verdict_reason || (
+                        result.verdict === 'CLEAN'
+                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate with a trust score of ${result.deployer.reputation_score}/100. Relatively safe.`
+                          : result.verdict === 'SUSPICIOUS'
+                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate. Exercise caution before investing.`
+                          : `This deployer has killed ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate). Do NOT invest.`
+                      )}
+                    </p>
+                    {/* Cross-reference badge */}
+                    {result.cross_reference && (
+                      <div className={`mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
+                        result.cross_reference.rugcheck_agrees
+                          ? 'bg-green-500/10 text-green-400'
+                          : 'bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {result.cross_reference.rugcheck_agrees ? (
+                          <><CheckCircle2 size={12} /> RugCheck agrees: {result.cross_reference.rugcheck_risk}</>
+                        ) : (
+                          <><AlertTriangle size={12} /> {result.cross_reference.discrepancy || `RugCheck says ${result.cross_reference.rugcheck_risk}`}</>
+                        )}
+                      </div>
+                    )}
+                    {/* Small sample size warning */}
+                    {result.deployer.tokens_created <= 2 && (
+                      <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                        <AlertTriangle size={10} className="text-yellow-500 flex-shrink-0" />
+                        Limited data — this deployer has only created {result.deployer.tokens_created} token{result.deployer.tokens_created !== 1 ? 's' : ''}. Scores are more reliable with larger track records.
+                      </p>
+                    )}
+                    {/* Tokens may be incomplete warning */}
+                    {result.confidence?.tokens_may_be_incomplete && (
+                      <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                        <AlertTriangle size={10} className="text-yellow-500 flex-shrink-0" />
+                        Deployer has 5000+ transactions — some tokens may not have been found.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Deployer stats */}
               <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
                 <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -826,10 +889,33 @@ export default function ScannerClient({ initialAddress }) {
                   </div>
                   <div>
                     <div className="text-xs text-slate-500 mb-1">Tokens Dead</div>
-                    <div className={`text-lg font-semibold ${result.deployer.tokens_dead > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {result.deployer.tokens_dead}
-                      {result.deployer.tokens_unverified > 0 && (
-                        <span className="text-xs text-yellow-500 ml-1">+ {result.deployer.tokens_unverified} unverified</span>
+                    <div className="text-lg font-semibold">
+                      {/* Dead token breakdown: confirmed rugs, natural deaths, unverified */}
+                      {(result.deployer.confirmed_rugs > 0 || result.deployer.natural_deaths > 0) ? (
+                        <div className="space-y-0.5">
+                          {result.deployer.confirmed_rugs > 0 && (
+                            <div className="text-red-400">{result.deployer.confirmed_rugs} confirmed rug{result.deployer.confirmed_rugs !== 1 ? 's' : ''}</div>
+                          )}
+                          {result.deployer.natural_deaths > 0 && (
+                            <div className="text-slate-400 text-sm">{result.deployer.natural_deaths} natural death{result.deployer.natural_deaths !== 1 ? 's' : ''}</div>
+                          )}
+                          {(() => {
+                            const unclassified = result.deployer.tokens_dead - (result.deployer.confirmed_rugs || 0) - (result.deployer.natural_deaths || 0);
+                            return unclassified > 0 ? (
+                              <div className="text-yellow-400 text-sm">{unclassified} unclassified</div>
+                            ) : null;
+                          })()}
+                          {result.deployer.tokens_unverified > 0 && (
+                            <div className="text-yellow-500 text-sm">{result.deployer.tokens_unverified} unverified</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className={result.deployer.tokens_dead > 0 ? 'text-red-400' : 'text-green-400'}>
+                          {result.deployer.tokens_dead}
+                          {result.deployer.tokens_unverified > 0 && (
+                            <span className="text-xs text-yellow-500 ml-1">+ {result.deployer.tokens_unverified} unverified</span>
+                          )}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -979,54 +1065,79 @@ export default function ScannerClient({ initialAddress }) {
                 </div>
               )}
 
-              {/* RugCheck Cross-Reference */}
-              {result.rugcheck && result.rugcheck.risks && result.rugcheck.risks.length > 0 && (
-                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Shield size={14} />
-                    RugCheck Analysis
-                    {result.rugcheck.risk_score != null && (
-                      <span className="text-slate-500 font-normal normal-case ml-2">
-                        Score: {result.rugcheck.risk_score}
-                      </span>
-                    )}
-                  </h3>
-                  <div className="space-y-2">
-                    {result.rugcheck.risks.slice(0, 10).map((risk, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            risk.level === 'good' || risk.level === 'info' ? 'bg-green-400'
-                              : risk.level === 'warn' || risk.level === 'warning' ? 'bg-yellow-400'
-                              : 'bg-red-400'
-                          }`} />
-                          <span className="text-slate-300">{risk.name}</span>
-                        </div>
-                        <span className={`text-xs ${
-                          risk.level === 'good' || risk.level === 'info' ? 'text-green-400'
-                            : risk.level === 'warn' || risk.level === 'warning' ? 'text-yellow-400'
-                            : 'text-red-400'
-                        }`}>
-                          {risk.description || risk.level}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <ScoreBreakdownCard breakdown={result.score_breakdown} />
 
-              {/* Unverified tokens warning */}
-              {result.deployer.tokens_unverified > 0 && result.deployer.tokens_created > 0 &&
-                (result.deployer.tokens_unverified / result.deployer.tokens_created) > 0.2 && (
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-start gap-3">
-                  <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-yellow-400/90">
-                    {result.deployer.tokens_unverified} of {result.deployer.tokens_created} tokens could not be verified via DexScreener — death rate may be understated.
-                  </p>
+              {/* Funding trace */}
+              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Users size={14} />
+                  Funding & Cluster
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Funding Source</div>
+                    {result.funding.source_wallet ? (
+                      <div>
+                        <a
+                          href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
+                        >
+                          {truncAddr(result.funding.source_wallet)}
+                          <ExternalLink size={10} />
+                        </a>
+                        {result.funding.from_cex && result.funding.cex_name && (
+                          <span className="ml-2 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-full">
+                            {result.funding.cex_name}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-600">Unknown</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Other Deployers Funded</div>
+                    <div className={`text-lg font-semibold ${
+                      result.funding.other_deployers_funded > 3 ? 'text-red-400'
+                        : result.funding.other_deployers_funded > 0 ? 'text-yellow-400'
+                        : 'text-green-400'
+                    }`}>
+                      {result.funding.other_deployers_funded}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Cluster Tokens</div>
+                    <div className="text-lg font-semibold text-slate-300">
+                      {result.funding.cluster_total_tokens || 0}
+                      {result.funding.cluster_total_dead > 0 && (
+                        <span className="text-xs text-red-400 ml-2">
+                          ({result.funding.cluster_total_dead} dead)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {result.funding.network_wallets > 0 && (
+                    <div className="col-span-2 md:col-span-3 pt-4 border-t border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          result.funding.network_risk === 'high' ? 'bg-red-400'
+                            : result.funding.network_risk === 'medium' ? 'bg-yellow-400'
+                            : 'bg-green-400'
+                        }`} />
+                        <span className={`text-sm font-medium ${
+                          result.funding.network_risk === 'high' ? 'text-red-400'
+                            : result.funding.network_risk === 'medium' ? 'text-yellow-400'
+                            : 'text-green-400'
+                        }`}>
+                          Funding cluster includes {result.funding.network_wallets} wallet{result.funding.network_wallets !== 1 ? 's' : ''} that appear across {result.funding.network_tokens_affected} tokens as early holders
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Token list */}
               {(result.deployer.tokens || []).length > 0 && (
@@ -1129,115 +1240,41 @@ export default function ScannerClient({ initialAddress }) {
                 </div>
               )}
 
-              {/* Funding trace */}
-              <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Users size={14} />
-                  Funding & Cluster
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">Funding Source</div>
-                    {result.funding.source_wallet ? (
-                      <div>
-                        <a
-                          href={result.evidence?.funding_source_url || solscanUrl(result.funding.source_wallet)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-mono text-amber-400 hover:underline inline-flex items-center gap-1"
-                        >
-                          {truncAddr(result.funding.source_wallet)}
-                          <ExternalLink size={10} />
-                        </a>
-                        {result.funding.from_cex && result.funding.cex_name && (
-                          <span className="ml-2 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-full">
-                            {result.funding.cex_name}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-slate-600">Unknown</div>
+              {/* RugCheck Analysis */}
+              {result.rugcheck && result.rugcheck.risks && result.rugcheck.risks.length > 0 && (
+                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Shield size={14} />
+                    RugCheck Analysis
+                    {result.rugcheck.risk_score != null && (
+                      <span className="text-slate-500 font-normal normal-case ml-2">
+                        Score: {result.rugcheck.risk_score}
+                      </span>
                     )}
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">Other Deployers Funded</div>
-                    <div className={`text-lg font-semibold ${
-                      result.funding.other_deployers_funded > 3 ? 'text-red-400'
-                        : result.funding.other_deployers_funded > 0 ? 'text-yellow-400'
-                        : 'text-green-400'
-                    }`}>
-                      {result.funding.other_deployers_funded}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">Cluster Tokens</div>
-                    <div className="text-lg font-semibold text-slate-300">
-                      {result.funding.cluster_total_tokens || 0}
-                      {result.funding.cluster_total_dead > 0 && (
-                        <span className="text-xs text-red-400 ml-2">
-                          ({result.funding.cluster_total_dead} dead)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {result.funding.network_wallets > 0 && (
-                    <div className="col-span-2 md:col-span-3 pt-4 border-t border-slate-700">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          result.funding.network_risk === 'high' ? 'bg-red-400'
-                            : result.funding.network_risk === 'medium' ? 'bg-yellow-400'
-                            : 'bg-green-400'
-                        }`} />
-                        <span className={`text-sm font-medium ${
-                          result.funding.network_risk === 'high' ? 'text-red-400'
-                            : result.funding.network_risk === 'medium' ? 'text-yellow-400'
-                            : 'text-green-400'
+                  </h3>
+                  <div className="space-y-2">
+                    {result.rugcheck.risks.slice(0, 10).map((risk, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            risk.level === 'good' || risk.level === 'info' ? 'bg-green-400'
+                              : risk.level === 'warn' || risk.level === 'warning' ? 'bg-yellow-400'
+                              : 'bg-red-400'
+                          }`} />
+                          <span className="text-slate-300">{risk.name}</span>
+                        </div>
+                        <span className={`text-xs ${
+                          risk.level === 'good' || risk.level === 'info' ? 'text-green-400'
+                            : risk.level === 'warn' || risk.level === 'warning' ? 'text-yellow-400'
+                            : 'text-red-400'
                         }`}>
-                          Funding cluster includes {result.funding.network_wallets} wallet{result.funding.network_wallets !== 1 ? 's' : ''} that appear across {result.funding.network_tokens_affected} tokens as early holders
+                          {risk.description || risk.level}
                         </span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Share */}
-              <ShareRow result={result} address={initialAddress || query} />
-
-              {/* Verdict */}
-              <div className={`p-6 rounded-xl border ${
-                result.verdict === 'CLEAN' ? 'bg-green-500/5 border-green-500/20'
-                  : result.verdict === 'SUSPICIOUS' ? 'bg-yellow-500/5 border-yellow-500/20'
-                  : 'bg-red-500/5 border-red-500/20'
-              }`}>
-                <div className="flex items-start gap-3">
-                  {result.verdict === 'CLEAN'
-                    ? <CheckCircle2 size={24} className="text-green-400 flex-shrink-0 mt-0.5" />
-                    : result.verdict === 'SUSPICIOUS'
-                    ? <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                    : <Skull size={24} className="text-red-400 flex-shrink-0 mt-0.5" />}
-                  <div>
-                    <h3 className={`font-semibold mb-1 ${
-                      result.verdict === 'CLEAN' ? 'text-green-400'
-                        : result.verdict === 'SUSPICIOUS' ? 'text-yellow-400'
-                        : 'text-red-400'
-                    }`}>
-                      {result.verdict === 'CLEAN' ? 'Clean Deployer'
-                        : result.verdict === 'SUSPICIOUS' ? 'Suspicious Deployer'
-                        : 'Serial Rugger Detected'}
-                    </h3>
-                    <p className="text-sm text-slate-400">
-                      {result.verdict_reason || (
-                        result.verdict === 'CLEAN'
-                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate with a trust score of ${result.deployer.reputation_score}/100. Relatively safe.`
-                          : result.verdict === 'SUSPICIOUS'
-                          ? `This deployer has a ${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate. Exercise caution before investing.`
-                          : `This deployer has killed ${result.deployer.tokens_dead} out of ${result.deployer.tokens_created} tokens (${((result.deployer.death_rate ?? result.deployer.rug_rate) * 100).toFixed(1)}% death rate). Do NOT invest.`
-                      )}
-                    </p>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Evidence & Confidence */}
               <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
@@ -1306,6 +1343,9 @@ export default function ScannerClient({ initialAddress }) {
                   )}
                 </div>
               </div>
+
+              {/* Share */}
+              <ShareRow result={result} address={initialAddress || query} />
 
               <div className="text-center text-xs text-slate-600">
                 Scanned at {new Date(result.scanned_at).toLocaleString()}

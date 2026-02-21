@@ -29,14 +29,14 @@ export const metadata = {
     title: 'DaybreakScan — Solana Deployer Reputation Scanner',
     description:
       "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
-    images: ['/daybreak-logo.png'],
+    images: [{ url: '/og', width: 1200, height: 630, alt: 'DaybreakScan — Solana Deployer Reputation Scanner' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'DaybreakScan — Solana Deployer Reputation Scanner',
     description:
       "Scan any Solana deployer's rug rate, funding cluster, and risk score. The deployer check that token scanners miss.",
-    images: ['/daybreak-logo.png'],
+    images: [{ url: '/og', width: 1200, height: 630, alt: 'DaybreakScan — Solana Deployer Reputation Scanner' }],
   },
   robots: { index: true, follow: true },
   icons: { icon: '/daybreak-logo-square.png' },
@@ -45,6 +45,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://api.daybreakscan.com" />
+        <link rel="dns-prefetch" href="https://api.daybreakscan.com" />
+      </head>
       <body className="font-sans antialiased bg-slate-900">
         <WalletProvider>
           <Nav />

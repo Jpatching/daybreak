@@ -36,13 +36,13 @@ export async function generateMetadata({ params }) {
             title,
             description,
             url: `/scan/${address}`,
-            images: [`https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`],
+            images: [{ url: `https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`, width: 1200, height: 630 }],
           },
           twitter: {
             card: 'summary_large_image',
             title,
             description,
-            images: [`https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`],
+            images: [{ url: `https://api.daybreakscan.com/api/v1/report/${address}/twitter.png`, width: 1200, height: 630 }],
           },
         };
       }
@@ -57,17 +57,18 @@ export async function generateMetadata({ params }) {
     title: `Deployer Scan: ${truncated}`,
     description: `Check this deployer's reputation on DaybreakScan — rug detection, cluster analysis, and scoring.`,
     alternates: { canonical: `/scan/${address}` },
+    robots: { index: false, follow: true },
     openGraph: {
       title: `Deployer Scan: ${truncated}`,
       description: `Check this deployer's reputation on DaybreakScan.`,
       url: `/scan/${address}`,
-      images: [`https://www.daybreakscan.com/og?address=${address}`],
+      images: [{ url: `https://www.daybreakscan.com/og?address=${address}`, width: 1200, height: 630 }],
     },
     twitter: {
       card: 'summary_large_image',
       title: `Deployer Scan: ${truncated}`,
       description: `Check this deployer's reputation on DaybreakScan.`,
-      images: [`https://www.daybreakscan.com/og?address=${address}`],
+      images: [{ url: `https://www.daybreakscan.com/og?address=${address}`, width: 1200, height: 630 }],
     },
   };
 }

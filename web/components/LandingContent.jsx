@@ -223,6 +223,78 @@ function LiveStats() {
   );
 }
 
+// ---------- How It Works ----------
+
+const howItWorksSteps = [
+  { num: '01', title: 'Find the Deployer', desc: 'Helius Enhanced API traces token creation back to the deployer wallet.', icon: Search },
+  { num: '02', title: 'Scan Token History', desc: 'Every token deployed on Pump.fun or standard SPL — found and catalogued.', icon: Database },
+  { num: '03', title: 'Check Liveness', desc: 'Each token checked on DexScreener. Below $100 liquidity = dead.', icon: Activity },
+  { num: '04', title: 'Trace Funding Network', desc: 'Follow the money: who funded this deployer? Did they fund others?', icon: Link2 },
+  { num: '05', title: 'Score & Verdict', desc: 'Bayesian 0–100 score weighing death rate, token count, lifespan, and cluster.', icon: Shield },
+];
+
+function HowItWorksSection() {
+  const [visible, setVisible] = useState(false);
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { threshold: 0.15 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section ref={sectionRef} className="py-20 px-6 relative z-10">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+          How Scans Work
+        </h2>
+        <p className="text-slate-400 text-center mb-12">
+          Five steps from token address to deployer verdict.
+        </p>
+
+        <div className="relative">
+          {/* Vertical line */}
+          <div className="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/40 via-amber-500/20 to-transparent" />
+
+          <div className="space-y-6">
+            {howItWorksSteps.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div
+                  key={step.num}
+                  className="relative pl-16 md:pl-20"
+                  style={{
+                    opacity: visible ? 1 : 0,
+                    transform: visible ? 'translateY(0)' : 'translateY(16px)',
+                    transition: `opacity 0.5s ease ${i * 100}ms, transform 0.5s ease ${i * 100}ms`,
+                  }}
+                >
+                  {/* Step number */}
+                  <div className="absolute left-0 top-0 w-12 h-12 md:w-16 md:h-16 flex items-center justify-center">
+                    <span className="text-amber-400 font-mono font-bold text-lg md:text-xl">{step.num}</span>
+                  </div>
+
+                  <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl backdrop-blur-xl p-5 hover:border-amber-400/20 transition-colors">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Icon size={18} className="text-amber-400 flex-shrink-0" />
+                      <h3 className="text-white font-semibold">{step.title}</h3>
+                    </div>
+                    <p className="text-slate-400 text-sm">{step.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---------- Spotlight Bento Grid ----------
 
 const bentoFeatures = [
@@ -429,6 +501,11 @@ export default function LandingContent() {
                 </button>
               </form>
 
+              <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-4">
+                <Zap size={12} className="text-amber-400" />
+                Average scan takes 8–15 seconds. No signup required.
+              </p>
+
               <div className="flex flex-col sm:flex-row gap-4 mb-2">
                 <a
                   href="https://github.com/Jpatching/daybreak"
@@ -444,6 +521,11 @@ export default function LandingContent() {
               </div>
 
               <LiveStats />
+              <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1"><Shield size={12} className="text-green-400" /> Open source & auditable</span>
+                <span className="flex items-center gap-1"><Lock size={12} className="text-amber-400" /> No seed phrase required</span>
+                <span>MIT licensed</span>
+              </div>
               <RecentScansFeed />
               <LeaderboardPreview />
             </div>
@@ -521,6 +603,9 @@ export default function LandingContent() {
           </div>
         </div>
       </section>
+
+      {/* How It Works */}
+      <HowItWorksSection />
 
       {/* Features - Bento Grid */}
       <BentoFeaturesSection />

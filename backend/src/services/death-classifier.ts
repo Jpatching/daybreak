@@ -33,7 +33,7 @@ export async function classifyDeaths(
   const classifiable = deadTokens
     .filter(t => t.liquidity > 0 || t.created_at !== null)
     .sort((a, b) => (b.liquidity || 0) - (a.liquidity || 0))
-    .slice(0, 20); // Cap at 20 to control API costs
+    .slice(0, 50); // Cap at 50 to balance API cost vs coverage
 
   // Tokens with no DexScreener data at all → natural (never got traction)
   for (const t of deadTokens) {
@@ -84,13 +84,13 @@ async function classifySingleToken(
     initial_transfer_is_associated: false,
   };
 
-  // Calculate age (time from creation to now — not true lifespan since we don't know exact death time)
+  // Calculate lifespan: for dead tokens, cap at 7 days (consistent with deployer route)
+  // since we don't know exact death time. This makes the quick-dump rule (<48h) useful.
   if (token.created_at) {
     const created = new Date(token.created_at).getTime();
-    evidence.lifespan_hours = Math.round((Date.now() - created) / (1000 * 60 * 60));
+    const ageHours = (Date.now() - created) / (1000 * 60 * 60);
+    evidence.lifespan_hours = Math.round(Math.min(ageHours, 7 * 24));
   }
-  // Note: lifespan_hours is actually token age, not time-to-death.
-  // True lifespan would require knowing when liquidity was removed.
 
   // Check deployer holdings for this token
   try {

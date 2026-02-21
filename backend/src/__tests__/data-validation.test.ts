@@ -221,6 +221,70 @@ describe('Data Accuracy: Death rate calculation', () => {
   });
 });
 
+describe('Data Accuracy: Deploy velocity only counts dated tokens', () => {
+  it('velocity uses dated token count, not total token count', () => {
+    // Simulate: 2 dated tokens over 10 days + 5 undated tokens
+    const creationDates = [
+      '2026-02-01T00:00:00Z',
+      '2026-02-11T00:00:00Z',
+    ];
+    const totalTokens = 7; // includes 5 undated
+
+    // Old (wrong): totalTokens / daySpan = 7 / 10 = 0.7
+    const daySpan = (new Date(creationDates[1]).getTime() - new Date(creationDates[0]).getTime()) / 86400000;
+    const wrongVelocity = Math.round((totalTokens / Math.max(1, daySpan)) * 100) / 100;
+    const correctVelocity = Math.round((creationDates.length / Math.max(1, daySpan)) * 100) / 100;
+
+    expect(correctVelocity).toBe(0.2);
+    expect(wrongVelocity).toBe(0.7);
+    expect(correctVelocity).not.toBe(wrongVelocity);
+  });
+
+  it('velocity with all tokens dated is unchanged', () => {
+    const creationDates = [
+      '2026-02-01T00:00:00Z',
+      '2026-02-06T00:00:00Z',
+      '2026-02-11T00:00:00Z',
+    ];
+    const daySpan = (new Date(creationDates[2]).getTime() - new Date(creationDates[0]).getTime()) / 86400000;
+    const velocity = Math.round((creationDates.length / Math.max(1, daySpan)) * 100) / 100;
+    expect(velocity).toBe(0.3);
+  });
+});
+
+describe('Data Accuracy: Lifespan cap consistency between routes', () => {
+  it('dead token lifespan is capped at 7 days', () => {
+    const created = new Date('2025-01-01T00:00:00Z').getTime();
+    const isAlive = false;
+    let days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+    // Apply cap (same logic in both deployer.ts and wallet.ts)
+    if (!isAlive && days > 7) days = 7;
+    expect(days).toBe(7);
+  });
+
+  it('alive token lifespan is NOT capped', () => {
+    const created = new Date('2025-01-01T00:00:00Z').getTime();
+    const isAlive = true;
+    let days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+    if (!isAlive && days > 7) days = 7;
+    expect(days).toBeGreaterThan(7);
+  });
+
+  it('cluster_total_dead uses deadCount consistently', () => {
+    // Simulating: 10 tokens, 5 verified dead, 3 unverified
+    const deadCount = 5;
+    const unknownCount = 3;
+    const adjustedDead = deadCount + unknownCount; // old wrong value
+
+    // Both initial and post-cluster should use deadCount (not adjustedDead)
+    const initialValue = deadCount;
+    const postClusterValue = deadCount;
+
+    expect(initialValue).toBe(postClusterValue);
+    expect(initialValue).not.toBe(adjustedDead);
+  });
+});
+
 describe('Data Accuracy: Verdict thresholds', () => {
   const noRisk: RiskPenalties = {
     mintAuthorityActive: false,

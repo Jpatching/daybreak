@@ -27,6 +27,8 @@ export interface DeployerInfo {
   tokens_dead: number;
   tokens_unverified: number;
   tokens_assumed_dead: number;
+  confirmed_rugs: number;
+  natural_deaths: number;
   rug_rate: number;
   death_rate: number;
   reputation_score: number;
@@ -134,6 +136,13 @@ export interface DeathEvidence {
   initial_transfer_is_associated: boolean;
 }
 
+export interface CrossReference {
+  rugcheck_agrees: boolean | null;
+  rugcheck_risk: string | null;
+  our_verdict: Verdict;
+  discrepancy: string | null;
+}
+
 export interface DeployerScan {
   token: TokenInfo;
   deployer: DeployerInfo;
@@ -144,6 +153,7 @@ export interface DeployerScan {
   token_risks: TokenRisks | null;
   market_data: TokenMarketData | null;
   rugcheck: RugCheckResult | null;
+  cross_reference: CrossReference | null;
   evidence: ScanEvidence;
   confidence: ScanConfidence;
   usage: ScanUsage;

@@ -36,7 +36,7 @@ import fs from 'fs';
 import pathModule from 'path';
 import type {
   DeployerScan, DeployerToken, FundingInfo, TokenRisks,
-  TokenMarketData, RugCheckResult,
+  TokenMarketData, RugCheckResult, CrossReference,
   ScanEvidence, ScanConfidence, ScanUsage,
 } from '../types';
 
@@ -212,7 +212,9 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
       if (status.pairCreatedAt) {
         const created = new Date(status.pairCreatedAt).getTime();
-        const days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+        let days = (Date.now() - created) / (1000 * 60 * 60 * 24);
+        // Dead tokens didn't live long — cap lifespan at 7 days to avoid inflating scores
+        if (!isAlive && days > 7) days = 7;
         totalLifespanDays += days;
         tokensWithLifespan++;
       }
@@ -277,8 +279,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
-    // Deploy velocity: use totalTokens (including unverified) / time span
-    // If we only have dates for a subset, extrapolate using total count
+    // Deploy velocity: tokens with known dates / time span
+    // Only count tokens we actually have creation dates for (not unverified)
     let deployVelocity: number | null = null;
     const creationDates = tokens
       .map(t => t.created_at)
@@ -286,10 +288,9 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       .sort();
     if (creationDates.length >= 2) {
       const daySpan = (new Date(creationDates[creationDates.length - 1]).getTime() - new Date(creationDates[0]).getTime()) / 86400000;
-      // Use totalTokens (not just dated ones) for more accurate velocity
-      deployVelocity = Math.round((totalTokens / Math.max(1, daySpan)) * 100) / 100;
-    } else if (totalTokens >= 2) {
-      deployVelocity = totalTokens; // All deployed at roughly same time
+      deployVelocity = Math.round((creationDates.length / Math.max(1, daySpan)) * 100) / 100;
+    } else if (creationDates.length >= 2) {
+      deployVelocity = creationDates.length; // All deployed at roughly same time
     }
 
     // Step 6: Parallel fetch — funding, deployer SOL balance, Jupiter price, RugCheck
@@ -318,7 +319,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       source_wallet: fundingSourceWallet,
       other_deployers_funded: 0,
       cluster_total_tokens: totalTokens,
-      cluster_total_dead: adjustedDead,
+      cluster_total_dead: deadCount,
       from_cex: false,
       cex_name: null,
       network_wallets: 0,
@@ -499,6 +500,27 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
     const rugcheck: RugCheckResult | null = rugcheckReport;
 
+    // Cross-reference our verdict with RugCheck
+    let crossReference: CrossReference | null = null;
+    if (rugcheckReport?.risk_level) {
+      const rcDanger = rugcheckReport.risk_level === 'Danger' || rugcheckReport.risk_level === 'High';
+      const rcGood = rugcheckReport.risk_level === 'Good';
+      const weClean = verdict === 'CLEAN';
+      const weBad = verdict === 'SERIAL_RUGGER';
+
+      const agrees = (rcDanger && weBad) || (rcGood && weClean) || (!rcDanger && !rcGood && !weClean && !weBad);
+      const discrepancy = (rcDanger && weClean) ? `RugCheck flags this token as ${rugcheckReport.risk_level} but deployer history appears clean`
+        : (rcGood && weBad) ? `RugCheck rates this token as Good but deployer has serial rug history`
+        : null;
+
+      crossReference = {
+        rugcheck_agrees: agrees,
+        rugcheck_risk: rugcheckReport.risk_level,
+        our_verdict: verdict,
+        discrepancy,
+      };
+    }
+
     const evidence: ScanEvidence = {
       deployer_url: `https://solscan.io/account/${deployerWallet}`,
       funding_source_url: fundingSourceWallet ? `https://solscan.io/account/${fundingSourceWallet}` : null,
@@ -532,7 +554,9 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         tokens_created: totalTokens,
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
-        tokens_assumed_dead: unknownCount,
+        tokens_assumed_dead: 0,
+        confirmed_rugs: confirmedRugs,
+        natural_deaths: naturalDeaths,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         death_rate: Math.round(deathRate * 1000) / 1000,
         reputation_score: score,
@@ -549,6 +573,7 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       token_risks: tokenRisks,
       market_data: marketData,
       rugcheck,
+      cross_reference: crossReference,
       evidence,
       confidence,
       usage,

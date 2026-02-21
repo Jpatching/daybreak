@@ -25,6 +25,10 @@ pre code {
   font-family: var(--font-jetbrains), 'Fira Code', 'Monaco', 'Consolas', monospace;
 }
 
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
 html {
   scroll-behavior: smooth;
 }
