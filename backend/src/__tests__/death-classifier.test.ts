@@ -113,7 +113,7 @@ describe('Death Classifier: natural death', () => {
     expect(c!.evidence.deployer_sold).toBe(false);
   });
 
-  it('classifies tokens with no DexScreener data as natural (never got traction)', async () => {
+  it('classifies tokens with no DexScreener data as unverified (unknown status)', async () => {
     const tokenAddr = 'Token666666666666666666666666666666666666666';
     const results = await classifyDeaths(
       DEPLOYER,
@@ -122,7 +122,7 @@ describe('Death Classifier: natural death', () => {
     );
     const c = results.get(tokenAddr);
     expect(c).toBeDefined();
-    expect(c!.type).toBe('natural');
+    expect(c!.type).toBe('unverified');
   });
 });
 
@@ -160,9 +160,9 @@ describe('Death Classifier: classification limit', () => {
     }));
 
     const results = await classifyDeaths(DEPLOYER, deadTokens, null);
-    // All 60 should get some classification (50 classifiable + 10 overflow as natural)
+    // All 60 should get some classification (50 classifiable + 10 overflow as unverified)
     expect(results.size).toBe(60);
     // The top 50 by liquidity should have been processed (even if they end up as natural/unverified)
-    // The bottom 10 should be natural (no DexScreener classification needed)
+    // The bottom 10 should be unverified (no DexScreener classification needed)
   });
 });

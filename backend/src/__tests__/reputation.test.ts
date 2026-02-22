@@ -53,7 +53,7 @@ describe('calculateReputation', () => {
     expect(result.verdict_reason.length).toBeGreaterThan(0);
   });
 
-  describe('rug rate component (40% weight) — uses rugRate * tokenCount Bayesian', () => {
+  describe('death rate component (40% weight) — uses deathRate Bayesian', () => {
     it('single token with 0% rug rate gets Bayesian-adjusted score', () => {
       // Bayesian: (0*1 + 0.5*5) / (1+5) = 0.4167 → deathComponent ≈ 23.3
       const { score } = calculateReputation(repInput({ rugRate: 0, tokenCount: 1, avgLifespanDays: 40, clusterSize: 0 }));
@@ -359,7 +359,7 @@ describe('calculateReputation', () => {
     it('includes detail strings for each component', () => {
       const { breakdown } = calculateReputation(repInput({ rugRate: 0.5, tokenCount: 10, avgLifespanDays: 5 }));
       expect(breakdown.details.length).toBeGreaterThanOrEqual(4);
-      expect(breakdown.details[0]).toContain('Rug rate');
+      expect(breakdown.details[0]).toContain('Death rate');
       expect(breakdown.details[1]).toContain('tokens created');
       expect(breakdown.details[2]).toContain('Avg lifespan');
       expect(breakdown.details[3]).toContain('Cluster size');

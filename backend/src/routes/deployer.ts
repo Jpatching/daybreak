@@ -338,8 +338,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
         funding.from_cex = cluster.fromCex;
         funding.cex_name = cluster.cexName;
         clusterChecked = true;
-      } catch {
-        // best-effort
+      } catch (err) {
+        console.error('[cluster] Analysis failed:', err instanceof Error ? err.message : err);
       }
     }
 
@@ -378,8 +378,8 @@ router.get('/:token_address', async (req: Request, res: Response) => {
 
         tokenRisksChecked = true;
       }
-    } catch {
-      // best-effort
+    } catch (err) {
+      console.error('[token-risks] Check failed:', err instanceof Error ? err.message : err);
     }
 
     // Step 7.6: Death classification (best-effort)
@@ -433,14 +433,14 @@ router.get('/:token_address', async (req: Request, res: Response) => {
       funding.network_risk = networkStats.network_wallets >= 4 ? 'high'
         : networkStats.network_wallets >= 1 ? 'medium'
         : 'low';
-    } catch {
-      // best-effort
+    } catch (err) {
+      console.error('[network] Wallet appearance tracking failed:', err instanceof Error ? err.message : err);
     }
 
     // Step 8: Calculate reputation score (Bayesian)
     const { score, verdict, verdict_reason, breakdown } = calculateReputation({
       deathRate,
-      rugRate,
+      rugRate: deathRate,  // Use deathRate for both — Bayesian scoring uses verified-only data
       tokenCount: totalTokens,
       verifiedCount,
       avgLifespanDays: avgLifespan,

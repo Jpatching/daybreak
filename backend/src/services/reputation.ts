@@ -12,7 +12,7 @@ export interface RiskPenalties {
 
 interface ReputationInput {
   deathRate: number;       // 0.0 - 1.0 (only verified tokens)
-  rugRate: number;         // 0.0 - 1.0 (includes unverified as dead)
+  rugRate: number;         // 0.0 - 1.0 (legacy — callers should pass deathRate for both)
   tokenCount: number;      // total tokens created
   verifiedCount: number;   // tokens with DexScreener data
   avgLifespanDays: number; // average days tokens survived
@@ -34,13 +34,13 @@ const PRIOR_WEIGHT = 5; // equivalent sample size
 export function calculateReputation(input: ReputationInput): ReputationResult {
   const details: string[] = [];
 
-  // Bayesian regression: weight rugRate (includes unverified as dead) by total token count
-  const bayesianRate = (input.rugRate * input.tokenCount + PRIOR_RATE * PRIOR_WEIGHT)
+  // Bayesian regression: weight deathRate (verified tokens only) by total token count
+  const bayesianRate = (input.deathRate * input.tokenCount + PRIOR_RATE * PRIOR_WEIGHT)
                      / (input.tokenCount + PRIOR_WEIGHT);
 
   // Death rate component (40% weight) — higher rate = lower score
   const deathComponent = Math.round(((1 - bayesianRate) * 40) * 10) / 10;
-  details.push(`Rug rate ${(input.rugRate * 100).toFixed(1)}% (Bayesian: ${(bayesianRate * 100).toFixed(1)}%): ${deathComponent.toFixed(1)} / 40 points`);
+  details.push(`Death rate ${(input.deathRate * 100).toFixed(1)}% (Bayesian: ${(bayesianRate * 100).toFixed(1)}%): ${deathComponent.toFixed(1)} / 40 points`);
 
   // Token count penalty (20% weight) — more tokens = more suspicious (log scale)
   // Scale penalty by death rate: many tokens is only suspicious if most are dead
@@ -151,7 +151,7 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
   const unknownCount = input.tokenCount - input.verifiedCount;
   let verdict_reason: string;
   if (bayesianRate > 0.7) {
-    verdict_reason = `High token death rate (${(input.rugRate * 100).toFixed(0)}%) across ${input.tokenCount} tokens`;
+    verdict_reason = `High token death rate (${(input.deathRate * 100).toFixed(0)}%) across ${input.tokenCount} tokens`;
   } else if (riskDeduction >= 15) {
     const flags: string[] = [];
     if (input.riskPenalties?.mintAuthorityActive) flags.push('mint authority');
@@ -167,11 +167,11 @@ export function calculateReputation(input: ReputationInput): ReputationResult {
   } else if (input.tokenCount > 50 && unknownCount / input.tokenCount > 0.5) {
     verdict_reason = `Most tokens unverified (${unknownCount} of ${input.tokenCount}) — likely mass pump.fun deployer`;
   } else if (verdict === 'SERIAL_RUGGER') {
-    verdict_reason = `${input.tokenCount} tokens created with ${(input.rugRate * 100).toFixed(0)}% death rate — serial rug pattern`;
+    verdict_reason = `${input.tokenCount} tokens created with ${(input.deathRate * 100).toFixed(0)}% death rate — serial rug pattern`;
   } else if (verdict === 'SUSPICIOUS') {
-    verdict_reason = `Elevated risk signals — ${(input.rugRate * 100).toFixed(0)}% death rate with ${input.tokenCount} tokens`;
+    verdict_reason = `Elevated risk signals — ${(input.deathRate * 100).toFixed(0)}% death rate with ${input.tokenCount} tokens`;
   } else {
-    verdict_reason = `Clean deployer with ${(input.rugRate * 100).toFixed(0)}% death rate and trust score of ${score}/100`;
+    verdict_reason = `Clean deployer with ${(input.deathRate * 100).toFixed(0)}% death rate and trust score of ${score}/100`;
   }
 
   return { score, verdict, verdict_reason, breakdown };

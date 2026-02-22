@@ -35,11 +35,11 @@ export async function classifyDeaths(
     .sort((a, b) => (b.liquidity || 0) - (a.liquidity || 0))
     .slice(0, 50); // Cap at 50 to balance API cost vs coverage
 
-  // Tokens with no DexScreener data at all → natural (never got traction)
+  // Tokens with no DexScreener data at all → unverified (we don't know their status)
   for (const t of deadTokens) {
     if (!classifiable.some(c => c.address === t.address)) {
       results.set(t.address, {
-        type: 'natural',
+        type: 'unverified',
         evidence: {
           deployer_sold: false,
           deployer_holdings_pct: null,

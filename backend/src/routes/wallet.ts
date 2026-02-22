@@ -8,13 +8,18 @@ import {
   getSignaturesForAddress,
   analyzeCluster,
   getWalletSolBalance,
+  checkMintAuthority,
+  checkDeployerHoldings,
+  checkTopHolders,
+  checkBundledLaunch,
 } from '../services/helius';
 import { bulkCheckTokens } from '../services/dexscreener';
-import { calculateReputation } from '../services/reputation';
+import { classifyDeaths } from '../services/death-classifier';
+import { calculateReputation, type RiskPenalties } from '../services/reputation';
 import { TTLCache } from '../services/cache';
 import { logScan, incrementGuestUsage } from '../services/db';
 import { incrementUsage, getUsageCount, SCANS_LIMIT } from '../services/auth';
-import type { DeployerScan, DeployerToken, FundingInfo, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
+import type { DeployerScan, DeployerToken, FundingInfo, TokenRisks, ScanEvidence, ScanConfidence, ScanUsage } from '../types';
 
 const router = Router();
 const walletCache = new TTLCache<DeployerScan>(1800); // 30 min TTL
@@ -113,7 +118,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
     const rugRate = totalTokens > 0 ? adjustedDead / totalTokens : 0;
     const avgLifespan = tokensWithLifespan > 0 ? totalLifespanDays / tokensWithLifespan : 0;
 
-    // Funding trace + cluster analysis
+    // Funding trace (moved before death classification — classifier needs fundingSourceWallet)
     const fundingResult = await findFundingSource(wallet_address);
     const fundingSourceWallet = fundingResult?.wallet || null;
 
@@ -139,16 +144,93 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         funding.from_cex = cluster.fromCex;
         funding.cex_name = cluster.cexName;
         clusterChecked = true;
-      } catch { /* best-effort */ }
+      } catch (err) {
+        console.error('[cluster] Analysis failed:', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Death classification (best-effort)
+    let confirmedRugs = 0;
+    let naturalDeaths = 0;
+    try {
+      const deadTokensForClassification = tokens
+        .filter(t => t.alive === false)
+        .map(t => ({ address: t.address, liquidity: t.liquidity, created_at: t.created_at }));
+
+      if (deadTokensForClassification.length > 0) {
+        const classifications = await classifyDeaths(
+          wallet_address,
+          deadTokensForClassification,
+          fundingSourceWallet,
+        );
+
+        for (const t of tokens) {
+          const classification = classifications.get(t.address);
+          if (classification) {
+            t.death_type = classification.type;
+            t.death_evidence = classification.evidence;
+          }
+        }
+
+        confirmedRugs = tokens.filter(t =>
+          t.death_type === 'likely_rug' || t.death_type === 'distributed_rug'
+        ).length;
+        naturalDeaths = tokens.filter(t => t.death_type === 'natural').length;
+      }
+    } catch (err) {
+      console.error('[death-classifier] Wallet classification failed:', err instanceof Error ? err.message : err);
+    }
+
+    // Token risk checks (best-effort, use first verified token)
+    let tokenRisks: TokenRisks | null = null;
+    let riskPenalties: RiskPenalties | undefined;
+    let tokenRisksChecked = false;
+    const firstVerifiedToken = verifiedMints[0];
+    if (firstVerifiedToken) {
+      try {
+        const mintInfo = await checkMintAuthority(firstVerifiedToken);
+        if (mintInfo) {
+          const [deployerHoldings, topHolders, bundled] = await Promise.all([
+            checkDeployerHoldings(wallet_address, firstVerifiedToken, mintInfo.supply, mintInfo.decimals).catch(() => null),
+            checkTopHolders(firstVerifiedToken, mintInfo.supply).catch(() => null),
+            checkBundledLaunch(firstVerifiedToken, '').catch(() => null),
+          ]);
+
+          tokenRisks = {
+            mint_authority: mintInfo.mintAuthority,
+            freeze_authority: mintInfo.freezeAuthority,
+            deployer_holdings_pct: deployerHoldings,
+            top_holder_pct: topHolders?.topHolderPct ?? null,
+            bundle_detected: bundled,
+            lp_locked: null,
+            lp_lock_pct: null,
+          };
+
+          riskPenalties = {
+            mintAuthorityActive: mintInfo.mintAuthority !== null,
+            freezeAuthorityActive: mintInfo.freezeAuthority !== null,
+            topHolderPct: topHolders?.topHolderPct ?? null,
+            bundleDetected: bundled === true,
+            deployerHoldingsPct: deployerHoldings,
+            deployVelocity: null,
+            deployerIsBurner: false,
+          };
+
+          tokenRisksChecked = true;
+        }
+      } catch {
+        console.error('[token-risks] Wallet route risk check failed');
+      }
     }
 
     const { score, verdict, verdict_reason, breakdown } = calculateReputation({
       deathRate,
-      rugRate,
+      rugRate: deathRate,  // Use deathRate for both — Bayesian scoring uses verified-only data
       tokenCount: totalTokens,
       verifiedCount,
       avgLifespanDays: avgLifespan,
       clusterSize: funding.other_deployers_funded,
+      riskPenalties,
     });
 
     let firstSeen: string | null = null;
@@ -176,7 +258,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       tokens_unverified: unknownCount,
       deployer_method: 'enhanced_api',
       cluster_checked: clusterChecked,
-      token_risks_checked: false,
+      token_risks_checked: tokenRisksChecked,
       tokens_may_be_incomplete: tokenResult.limitReached,
     };
 
@@ -195,8 +277,8 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
         tokens_dead: deadCount,
         tokens_unverified: unknownCount,
         tokens_assumed_dead: 0,
-        confirmed_rugs: 0,
-        natural_deaths: 0,
+        confirmed_rugs: confirmedRugs,
+        natural_deaths: naturalDeaths,
         rug_rate: Math.round(rugRate * 1000) / 1000,
         death_rate: Math.round(deathRate * 1000) / 1000,
         reputation_score: score,
@@ -210,7 +292,7 @@ router.get('/:wallet_address', async (req: Request, res: Response) => {
       verdict,
       verdict_reason,
       score_breakdown: breakdown,
-      token_risks: null,
+      token_risks: tokenRisks,
       market_data: null,
       rugcheck: null,
       cross_reference: null,
