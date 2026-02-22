@@ -9,6 +9,8 @@ import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/sp
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import useAuth from '@/hooks/useAuth';
 import { scanToken, scanTokenPaid, guestScanToken, fetchUsage, fetchRecentScans, PaymentRequiredError } from '@/lib/api';
+import { features } from '@/lib/features';
+import ComingSoon from '@/components/ComingSoon';
 import {
   Search,
   CheckCircle2,
@@ -977,6 +979,53 @@ export default function ScannerClient({ initialAddress }) {
                 </div>
               </div>
 
+              {/* Data confidence indicator */}
+              {features.confidenceIndicator && result.confidence && (
+                <div className={`p-4 rounded-xl border ${
+                  result.confidence.tokens_unverified > result.confidence.tokens_verified
+                    ? 'bg-yellow-500/5 border-yellow-500/20'
+                    : result.confidence.token_risks_checked
+                    ? 'bg-green-500/5 border-green-500/20'
+                    : 'bg-slate-800/30 border-slate-700/50'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield size={14} className={
+                      result.confidence.tokens_unverified > result.confidence.tokens_verified
+                        ? 'text-yellow-400' : 'text-green-400'
+                    } />
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Data Confidence
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <span className="text-xs text-slate-400">
+                      <span className="text-green-400 font-mono">{result.confidence.tokens_verified}</span> verified
+                    </span>
+                    {result.confidence.tokens_unverified > 0 && (
+                      <span className="text-xs text-slate-400">
+                        <span className="text-yellow-400 font-mono">{result.confidence.tokens_unverified}</span> unverified
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-400">
+                      Risks: <span className={result.confidence.token_risks_checked ? 'text-green-400' : 'text-yellow-400'}>
+                        {result.confidence.token_risks_checked ? 'Checked' : 'Unavailable'}
+                      </span>
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Cluster: <span className={result.confidence.cluster_checked ? 'text-green-400' : 'text-yellow-400'}>
+                        {result.confidence.cluster_checked ? 'Checked' : 'Unavailable'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!features.confidenceIndicator && result.confidence && result.confidence.tokens_unverified > 0 && (
+                <ComingSoon
+                  title="Data Confidence Indicator"
+                  description="Detailed breakdown of data verification quality for each scan."
+                />
+              )}
+
               {/* Deployer stats */}
               <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
                 <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -1376,6 +1425,20 @@ export default function ScannerClient({ initialAddress }) {
 
               {/* Share */}
               <ShareRow result={result} address={initialAddress || query} />
+
+              {/* Coming Soon features */}
+              {!features.historicalTrends && (
+                <ComingSoon
+                  title="Deployer History Trends"
+                  description="Track how this deployer's behavior and scores change over time."
+                />
+              )}
+              {!features.deployerComparison && (
+                <ComingSoon
+                  title="Deployer Comparison"
+                  description="Compare this deployer against average Pump.fun deployer metrics."
+                />
+              )}
 
               <div className="text-center text-xs text-slate-600">
                 Scanned at {new Date(result.scanned_at).toLocaleString()}
