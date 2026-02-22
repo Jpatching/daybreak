@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { verifyToken, checkRateLimit, incrementUsage, getRemainingScans, getUsageCount, SCANS_LIMIT } from '../services/auth';
 import { buildPaymentDetails, type X402ServerConfig } from '../services/x402';
 import { checkGuestRateLimit, incrementGuestUsage, getGuestUsage } from '../services/db';
@@ -11,8 +12,16 @@ declare global {
       scansUsed?: number;
       scansRemaining?: number;
       scansLimit?: number;
+      requestId?: string;
     }
   }
+}
+
+// Request correlation ID middleware
+export function requestId(req: Request, _res: Response, next: NextFunction): void {
+  const id = req.headers['x-request-id'] as string || crypto.randomUUID().slice(0, 8);
+  req.requestId = id;
+  next();
 }
 
 // x402 config for 402 responses (lazy-loaded from env)
