@@ -53,17 +53,17 @@ function ReputationGauge({ score }) {
   const offset = c - (score / 100) * c;
   const color = score >= 70 ? '#22c55e' : score >= 30 ? '#eab308' : '#ef4444';
   return (
-    <div className="relative w-28 h-28">
-      <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="45" fill="none" stroke="#1e293b" strokeWidth="8" />
-        <circle cx="50" cy="50" r="45" fill="none" stroke={color} strokeWidth="8"
+    <div className="relative w-36 h-36">
+      <svg className="w-36 h-36 -rotate-90" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" fill="none" stroke="#1e293b" strokeWidth="7" />
+        <circle cx="50" cy="50" r="45" fill="none" stroke={color} strokeWidth="7"
           strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
           style={{ transition: 'stroke-dashoffset 1s ease-out' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold" style={{ color }}>{score}</span>
-        <span className="text-[10px] text-slate-500">/100</span>
+        <span className="text-4xl font-bold font-display" style={{ color }}>{score}</span>
+        <span className="text-xs text-slate-500">/100</span>
       </div>
     </div>
   );
@@ -73,15 +73,15 @@ function ReputationGauge({ score }) {
 
 function VerdictBadge({ verdict }) {
   const config = {
-    CLEAN: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle2 },
-    SUSPICIOUS: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: AlertTriangle },
-    SERIAL_RUGGER: { bg: 'bg-red-500/20', text: 'text-red-400', icon: Skull },
+    CLEAN: { bg: 'bg-green-500/20 border-green-500/30', text: 'text-green-400', icon: CheckCircle2 },
+    SUSPICIOUS: { bg: 'bg-yellow-500/20 border-yellow-500/30', text: 'text-yellow-400', icon: AlertTriangle },
+    SERIAL_RUGGER: { bg: 'bg-red-500/20 border-red-500/30', text: 'text-red-400', icon: Skull },
   };
   const c = config[verdict] || config.SUSPICIOUS;
   const Icon = c.icon;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${c.bg} ${c.text}`}>
-      <Icon size={16} />
+    <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-base font-bold font-display border ${c.bg} ${c.text}`}>
+      <Icon size={18} />
       {verdict.replace('_', ' ')}
     </span>
   );
@@ -291,6 +291,132 @@ function ShareRow({ result, address }) {
         {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
         {copied ? 'Copied!' : 'Copy Link'}
       </button>
+    </div>
+  );
+}
+
+// ---------- Token List (with unverified toggle) ----------
+
+function TokenRow({ t }) {
+  return (
+    <tr className="border-b border-slate-700/50 hover:bg-slate-700/20">
+      <td className="py-2 pr-4">
+        <a
+          href={solscanUrl(t.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-300 hover:text-amber-400 transition-colors font-mono text-xs inline-flex items-center gap-1"
+        >
+          {t.name || truncAddr(t.address)}
+          <ExternalLink size={10} />
+        </a>
+      </td>
+      <td className="py-2 pr-4 text-slate-400">{t.symbol || '???'}</td>
+      <td className="py-2 pr-4">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+          t.alive === null ? 'bg-slate-500/20 text-slate-400'
+            : t.alive && t.liquidity < 100 ? 'bg-yellow-500/20 text-yellow-400'
+            : t.alive ? 'bg-green-500/20 text-green-400'
+            : t.death_type === 'likely_rug' ? 'bg-red-500/20 text-red-400'
+            : t.death_type === 'distributed_rug' ? 'bg-red-500/20 text-red-400'
+            : t.death_type === 'natural' ? 'bg-slate-500/20 text-slate-400'
+            : 'bg-yellow-500/20 text-yellow-400'
+        }`}>
+          {t.alive === null ? (
+            <><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Unverified</>
+          ) : t.alive && t.liquidity < 100 ? (
+            <><AlertTriangle size={10} /> Low Liq</>
+          ) : t.alive ? (
+            <><CheckCircle2 size={10} /> Alive</>
+          ) : t.death_type === 'likely_rug' ? (
+            <><Skull size={10} /> Rug</>
+          ) : t.death_type === 'distributed_rug' ? (
+            <><Skull size={10} /> Distributed Rug</>
+          ) : t.death_type === 'natural' ? (
+            <><XCircle size={10} /> Natural Death</>
+          ) : (
+            <><XCircle size={10} /> Dead</>
+          )}
+        </span>
+      </td>
+      <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
+        {formatPrice(t.price_usd)}
+      </td>
+      <td className={`py-2 pr-4 text-right font-mono text-xs ${
+        t.price_change_24h == null ? 'text-slate-600'
+          : t.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'
+      }`}>
+        {t.price_change_24h != null ? `${t.price_change_24h >= 0 ? '+' : ''}${t.price_change_24h.toFixed(1)}%` : '-'}
+      </td>
+      <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
+        ${t.liquidity?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}
+      </td>
+      <td className="py-2 text-right">
+        <a
+          href={t.dexscreener_url || `https://dexscreener.com/solana/${t.address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-500 hover:text-amber-400 transition-colors"
+          title="View on DexScreener"
+        >
+          <ExternalLink size={12} />
+        </a>
+      </td>
+    </tr>
+  );
+}
+
+function TokenList({ tokens, confidence, deployer }) {
+  const [showUnverified, setShowUnverified] = useState(false);
+
+  const verified = tokens.filter(t => t.alive !== null);
+  const unverified = tokens.filter(t => t.alive === null);
+  const displayTokens = showUnverified ? tokens : verified;
+  const unverifiedCount = unverified.length || confidence?.tokens_unverified || deployer.tokens_unverified || 0;
+
+  return (
+    <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
+      <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <TrendingUp size={14} />
+        Deployer&apos;s Tokens ({verified.length} verified)
+        {unverifiedCount > 0 && (
+          <span className="text-slate-500 font-normal normal-case">
+            + {unverifiedCount} unverified
+          </span>
+        )}
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-700">
+              <th className="text-left pb-3 pr-4">Token</th>
+              <th className="text-left pb-3 pr-4">Symbol</th>
+              <th className="text-left pb-3 pr-4">Status</th>
+              <th className="text-right pb-3 pr-4">Price</th>
+              <th className="text-right pb-3 pr-4">24h</th>
+              <th className="text-right pb-3 pr-4">Liquidity</th>
+              <th className="text-right pb-3 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayTokens.slice(0, 50).map((t) => (
+              <TokenRow key={t.address} t={t} />
+            ))}
+          </tbody>
+        </table>
+        {displayTokens.length > 50 && (
+          <p className="text-xs text-slate-600 mt-3">Showing 50 of {displayTokens.length} tokens</p>
+        )}
+      </div>
+      {unverifiedCount > 0 && (
+        <button
+          onClick={() => setShowUnverified(!showUnverified)}
+          className="mt-3 flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          {showUnverified ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {showUnverified ? 'Hide' : 'Show'} {unverifiedCount} unverified token{unverifiedCount !== 1 ? 's' : ''}
+        </button>
+      )}
     </div>
   );
 }
@@ -582,7 +708,7 @@ export default function ScannerClient({ initialAddress }) {
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-center mb-2" style={gradientTextStyle}>
+          <h1 className="text-3xl md:text-4xl font-bold text-center mb-2 font-display" style={gradientTextStyle}>
             Deployer Reputation Scanner
           </h1>
           <p className="text-slate-400 text-center mb-6">
@@ -1141,103 +1267,7 @@ export default function ScannerClient({ initialAddress }) {
 
               {/* Token list */}
               {(result.deployer.tokens || []).length > 0 && (
-                <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700">
-                  <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <TrendingUp size={14} />
-                    Deployer's Tokens ({result.deployer.tokens.length})
-                    {(result.deployer.tokens_unverified > 0 || (result.confidence?.tokens_unverified || 0) > 0) && (
-                      <span className="text-yellow-500 font-normal normal-case">
-                        + {result.confidence?.tokens_unverified || result.deployer.tokens_unverified} unverified
-                      </span>
-                    )}
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-700">
-                          <th className="text-left pb-3 pr-4">Token</th>
-                          <th className="text-left pb-3 pr-4">Symbol</th>
-                          <th className="text-left pb-3 pr-4">Status</th>
-                          <th className="text-right pb-3 pr-4">Price</th>
-                          <th className="text-right pb-3 pr-4">24h</th>
-                          <th className="text-right pb-3 pr-4">Liquidity</th>
-                          <th className="text-right pb-3 w-8"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.deployer.tokens.slice(0, 50).map((t) => (
-                          <tr key={t.address} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                            <td className="py-2 pr-4">
-                              <a
-                                href={solscanUrl(t.address)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-slate-300 hover:text-amber-400 transition-colors font-mono text-xs inline-flex items-center gap-1"
-                              >
-                                {t.name || truncAddr(t.address)}
-                                <ExternalLink size={10} />
-                              </a>
-                            </td>
-                            <td className="py-2 pr-4 text-slate-400">{t.symbol || '???'}</td>
-                            <td className="py-2 pr-4">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                t.alive === null ? 'bg-slate-500/20 text-slate-400'
-                                  : t.alive && t.liquidity < 100 ? 'bg-yellow-500/20 text-yellow-400'
-                                  : t.alive ? 'bg-green-500/20 text-green-400'
-                                  : t.death_type === 'likely_rug' ? 'bg-red-500/20 text-red-400'
-                                  : t.death_type === 'distributed_rug' ? 'bg-red-500/20 text-red-400'
-                                  : t.death_type === 'natural' ? 'bg-slate-500/20 text-slate-400'
-                                  : 'bg-yellow-500/20 text-yellow-400'
-                              }`}>
-                                {t.alive === null ? (
-                                  <><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Unverified</>
-                                ) : t.alive && t.liquidity < 100 ? (
-                                  <><AlertTriangle size={10} /> Low Liq</>
-                                ) : t.alive ? (
-                                  <><CheckCircle2 size={10} /> Alive</>
-                                ) : t.death_type === 'likely_rug' ? (
-                                  <><Skull size={10} /> Rug</>
-                                ) : t.death_type === 'distributed_rug' ? (
-                                  <><Skull size={10} /> Distributed Rug</>
-                                ) : t.death_type === 'natural' ? (
-                                  <><XCircle size={10} /> Natural Death</>
-                                ) : (
-                                  <><XCircle size={10} /> Dead</>
-                                )}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
-                              {formatPrice(t.price_usd)}
-                            </td>
-                            <td className={`py-2 pr-4 text-right font-mono text-xs ${
-                              t.price_change_24h == null ? 'text-slate-600'
-                                : t.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {t.price_change_24h != null ? `${t.price_change_24h >= 0 ? '+' : ''}${t.price_change_24h.toFixed(1)}%` : '-'}
-                            </td>
-                            <td className="py-2 pr-4 text-right font-mono text-xs text-slate-400">
-                              ${t.liquidity?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}
-                            </td>
-                            <td className="py-2 text-right">
-                              <a
-                                href={t.dexscreener_url || `https://dexscreener.com/solana/${t.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-slate-500 hover:text-amber-400 transition-colors"
-                                title="View on DexScreener"
-                              >
-                                <ExternalLink size={12} />
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {result.deployer.tokens.length > 50 && (
-                      <p className="text-xs text-slate-600 mt-3">Showing 50 of {result.deployer.tokens.length} tokens</p>
-                    )}
-                  </div>
-                </div>
+                <TokenList tokens={result.deployer.tokens} confidence={result.confidence} deployer={result.deployer} />
               )}
 
               {/* RugCheck Analysis */}

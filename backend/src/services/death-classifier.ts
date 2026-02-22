@@ -176,7 +176,12 @@ async function classifySingleToken(
     return { type: 'likely_rug', evidence };
   }
 
-  // 4. Natural death: no real buyers and deployer still holds
+  // 4. Short-lived dump: deployer sold within 7 days regardless of liquidity
+  if (evidence.deployer_sold && evidence.lifespan_hours !== null && evidence.lifespan_hours < 7 * 24) {
+    return { type: 'likely_rug', evidence };
+  }
+
+  // 5. Natural death: no real buyers and deployer still holds
   if (!evidence.had_real_buyers && (evidence.deployer_holdings_pct === null || evidence.deployer_holdings_pct > 0)) {
     return { type: 'natural', evidence };
   }

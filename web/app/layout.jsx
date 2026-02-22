@@ -1,4 +1,4 @@
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import WalletProvider from '@/components/WalletProvider';
 import Nav from '@/components/Nav';
@@ -13,6 +13,11 @@ const inter = Inter({
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-jetbrains',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-display',
 });
 
 export const metadata = {
@@ -44,7 +49,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+    <html lang="en" className={`${inter.variable} ${jetbrains.variable} ${spaceGrotesk.variable}`}>
       <head>
         <link rel="preconnect" href="https://api.daybreakscan.com" />
         <link rel="dns-prefetch" href="https://api.daybreakscan.com" />

@@ -249,7 +249,7 @@ function HowItWorksSection() {
   return (
     <section ref={sectionRef} className="py-20 px-6 relative z-10">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2 font-display" style={gradientTextStyle}>
           How Scans Work
         </h2>
         <p className="text-slate-400 text-center mb-12">
@@ -360,7 +360,7 @@ function BentoFeaturesSection() {
   return (
     <section ref={sectionRef} className="py-20 px-6 relative z-10">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2 font-display" style={gradientTextStyle}>
           What DaybreakScan Analyzes
         </h2>
         <p className="text-slate-400 text-center mb-12">
@@ -407,42 +407,37 @@ function BentoFeaturesSection() {
 
 function VerdictsSection() {
   const verdicts = [
-    { name: 'CLEAN', icon: CheckCircle2, status: 'Score 70-100', detail: 'Safe deployer', color: 'green' },
-    { name: 'SUSPICIOUS', icon: AlertTriangle, status: 'Score 30-70', detail: 'Moderate risk', color: 'yellow' },
-    { name: 'SERIAL RUGGER', icon: XCircle, status: 'Score 0-30', detail: '>70% rug rate', color: 'red' },
-    { name: 'Rug Rate', icon: Skull, status: 'Key Metric', detail: 'Dead / Total tokens', color: 'amber' },
+    { name: 'CLEAN', icon: CheckCircle2, status: 'Score 60–100', detail: 'Low death rate, trustworthy track record', color: 'green' },
+    { name: 'SUSPICIOUS', icon: AlertTriangle, status: 'Score 30–59', detail: 'Moderate risk, exercise caution', color: 'yellow' },
+    { name: 'SERIAL RUGGER', icon: Skull, status: 'Score 0–29', detail: 'High death rate, avoid at all costs', color: 'red' },
   ];
 
   return (
     <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-2 font-display" style={gradientTextStyle}>
           Three-Tier Verdict System
         </h2>
-        <p className="text-slate-400 text-center mb-8">Every deployer gets a score and a verdict.</p>
+        <p className="text-slate-400 text-center mb-8">Every deployer gets a Bayesian 0–100 score and a verdict.</p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {verdicts.map((v) => {
             const Icon = v.icon;
+            const colorClass = v.color === 'green' ? 'text-green-400'
+              : v.color === 'red' ? 'text-red-400'
+              : 'text-yellow-400';
+            const borderClass = v.color === 'green' ? 'border-green-500/30'
+              : v.color === 'red' ? 'border-red-500/30'
+              : 'border-yellow-500/30';
             return (
               <div
                 key={v.name}
-                className="flex flex-col items-center gap-2 p-5 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 transition-colors"
+                className={`flex flex-col items-center gap-3 p-6 bg-slate-800/50 border ${borderClass} rounded-xl hover:border-amber-500/50 transition-colors`}
               >
-                <Icon size={36} className={
-                  v.color === 'green' ? 'text-green-400'
-                    : v.color === 'red' ? 'text-red-400'
-                    : v.color === 'yellow' ? 'text-yellow-400'
-                    : 'text-amber-400'
-                } />
-                <span className="text-white font-medium">{v.name}</span>
-                <span className={`text-xs ${
-                  v.color === 'green' ? 'text-green-400'
-                    : v.color === 'red' ? 'text-red-400'
-                    : v.color === 'yellow' ? 'text-yellow-400'
-                    : 'text-amber-400'
-                }`}>{v.status}</span>
-                {v.detail && <span className="text-xs text-slate-500">{v.detail}</span>}
+                <Icon size={40} className={colorClass} />
+                <span className={`text-lg font-bold font-display ${colorClass}`}>{v.name}</span>
+                <span className={`text-sm font-mono ${colorClass}`}>{v.status}</span>
+                <span className="text-xs text-slate-400 text-center">{v.detail}</span>
               </div>
             );
           })}
@@ -475,7 +470,7 @@ export default function LandingContent() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h1
-                className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight"
+                className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight font-display"
                 style={gradientTextStyleHero}
               >
                 Check Any Deployer<br />Before You Trade
@@ -616,7 +611,7 @@ export default function LandingContent() {
       {/* FAQ */}
       <section className="py-20 px-6 relative z-10">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-2" style={gradientTextStyle}>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-2 font-display" style={gradientTextStyle}>
             FAQ
           </h2>
           <p className="text-slate-400 text-center mb-10">
@@ -669,7 +664,7 @@ export default function LandingContent() {
       {/* CTA */}
       <section className="py-20 px-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-2" style={gradientTextStyle}>
+          <h2 className="text-3xl md:text-4xl font-bold mb-2 font-display" style={gradientTextStyle}>
             The next token you almost ape into
           </h2>
           <p className="text-xl text-slate-300 mb-8">
