@@ -4,6 +4,13 @@ import path from 'path';
 // Load .env from repo root
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+// Validate critical env vars (warn on import, crash at listen time)
+const REQUIRED_ENV_VARS = ['HELIUS_API_KEY', 'JWT_SECRET'];
+const missingEnvVars = REQUIRED_ENV_VARS.filter(key => !process.env[key]);
+if (missingEnvVars.length > 0) {
+  console.warn(`[startup] WARNING: Missing environment variables: ${missingEnvVars.join(', ')}`);
+}
+
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -13,7 +20,7 @@ import authRouter from './routes/auth';
 import deployerRouter from './routes/deployer';
 import walletRouter from './routes/wallet';
 import reportcardRouter from './routes/reportcard';
-import { requireAuth, guestRateLimit } from './middleware/auth';
+import { requireAuth, guestRateLimit, requestId } from './middleware/auth';
 import { createX402Middleware, getX402Stats, type X402ServerConfig } from './services/x402';
 import { closeBrowser } from './services/reportcard';
 import { startPumpPortal, stopPumpPortal, getRecentNewTokens, getRecentMigrations, getPumpPortalStatus } from './services/pumpportal';
@@ -57,6 +64,9 @@ app.use(cors({
   ],
   methods: ['GET', 'POST'],
 }));
+
+// Attach correlation ID to every request
+app.use(requestId);
 
 // Rate limiting: 30 req/min per IP
 app.use('/api/', rateLimit({
@@ -187,6 +197,11 @@ app.use((_req, res) => {
 
 // Only start listening when run directly (not imported for testing)
 if (require.main === module) {
+  if (missingEnvVars.length > 0) {
+    console.error(`[startup] FATAL: Cannot start without: ${missingEnvVars.join(', ')}`);
+    process.exit(1);
+  }
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     // Start PumpPortal WebSocket for real-time data
     startPumpPortal();

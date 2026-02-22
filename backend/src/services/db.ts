@@ -26,7 +26,7 @@ db.exec(`
   )
 `);
 
-// Seed admin wallets from env (comma-separated) with hardcoded fallback
+// Admin wallets: env takes precedence, hardcoded defaults for dev only
 const DEFAULT_ADMIN_WALLETS = [
   '5rSwWRfqGvnQaiJpW3sb3YKLbxtjVxgc4yrvrHNeNwE2',
   'DW2DQdED8ABpG98YCxf2UBgeJiw3ZaELJND1UsNEXkWq',
@@ -43,6 +43,7 @@ const upsertAdmin = db.prepare(`
 for (const wallet of ADMIN_WALLETS) {
   upsertAdmin.run(wallet);
 }
+console.log(`[db] Seeded ${ADMIN_WALLETS.length} admin wallet(s)${process.env.ADMIN_WALLETS ? ' from env' : ' (defaults)'}`);
 
 // Prepared statements
 const getUsageStmt = db.prepare(`
